@@ -8,7 +8,7 @@ type WorkspaceItem = { id: string; name: string; figma: boolean };
 
 const STORAGE_KEY = 'lazy-builder-workspaces';
 
-// load workspaces from localStorage (per-browser for now; shared index later)
+// load saved workspaces from localStorage — just local for now, server sync later
 function loadWorkspaces(): WorkspaceItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -24,6 +24,9 @@ export default function Workspace() {
   const [activeId, setActiveId] = useState<string>(() => workspaces[0]?.id ?? 'welcome');
   const [surface, setSurface] = useState<Surface>('notion');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [editingWsId, setEditingWsId] = useState<string | null>(null);
+  const [editWsName, setEditWsName] = useState('');
 
   const [dark, setDark] = useState(
     () =>
@@ -42,7 +45,7 @@ export default function Workspace() {
 
   const active = workspaces.find((w) => w.id === activeId) ?? workspaces[0];
 
-  // never sit on the Figma tab for a workspace that has no board
+  // kick back to Notion if workspace has no Figma board
   useEffect(() => {
     if (surface === 'figma' && active && !active.figma) setSurface('notion');
   }, [surface, active]);
@@ -55,7 +58,7 @@ export default function Workspace() {
     setSurface('notion');
   };
 
-  // option to attach a Figma page to the active workspace, any time
+  // bolt on a Figma board to this workspace
   const addFigma = () => {
     setWorkspaces((w) => w.map((x) => (x.id === activeId ? { ...x, figma: true } : x)));
     setSurface('figma');
@@ -64,6 +67,25 @@ export default function Workspace() {
   const selectWorkspace = (id: string) => {
     setActiveId(id);
     setSurface('notion');
+    setSelectedNodeId(null);
+  };
+
+  const handleFigmaRefClick = (nodeId: string) => {
+    if (!active?.figma) return;
+    setSelectedNodeId(nodeId);
+    setSurface('figma');
+  };
+
+  const startRenameWs = (ws: WorkspaceItem) => {
+    setEditingWsId(ws.id);
+    setEditWsName(ws.name);
+  };
+
+  const commitRenameWs = () => {
+    if (editingWsId && editWsName.trim()) {
+      setWorkspaces((w) => w.map((x) => (x.id === editingWsId ? { ...x, name: editWsName.trim() } : x)));
+    }
+    setEditingWsId(null);
   };
 
   return (
@@ -101,13 +123,26 @@ export default function Workspace() {
               <li key={w.id}>
                 <button
                   onClick={() => selectWorkspace(w.id)}
+                  onDoubleClick={() => startRenameWs(w)}
                   className={`flex w-full items-center justify-between gap-2 truncate rounded-md px-3 py-1.5 text-left text-sm ${
                     w.id === activeId
                       ? 'bg-neutral-200 font-medium dark:bg-neutral-700'
                       : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
                   }`}
                 >
-                  <span className="truncate">{w.name}</span>
+                  {editingWsId === w.id ? (
+                    <input
+                      autoFocus
+                      value={editWsName}
+                      onChange={(e) => setEditWsName(e.target.value)}
+                      onBlur={commitRenameWs}
+                      onKeyDown={(e) => { if (e.key === 'Enter') commitRenameWs(); if (e.key === 'Escape') setEditingWsId(null); }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 rounded border border-violet-400 bg-white px-1 py-0 text-sm outline-none dark:bg-neutral-800"
+                    />
+                  ) : (
+                    <span className="truncate">{w.name}</span>
+                  )}
                   {w.figma && <span title="has Figma board">🎨</span>}
                 </button>
               </li>
@@ -133,7 +168,7 @@ export default function Workspace() {
 
       <main className="flex flex-1 flex-col overflow-hidden">
         {/* surface tabs for the active workspace */}
-        <div className="flex items-center gap-1 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
+        <div className={`flex items-center gap-1 border-b border-neutral-200 py-2 pr-4 dark:border-neutral-800 ${sidebarOpen ? 'pl-4' : 'pl-12'}`}>
           <Tab active={surface === 'notion'} onClick={() => setSurface('notion')}>
             📝 Notion
           </Tab>
@@ -156,11 +191,21 @@ export default function Workspace() {
           {surface === 'notion' ? (
             <div className="h-full overflow-auto p-8">
               <div className="mx-auto max-w-3xl">
-                <Editor key={`${active.id}:notion`} docId={`${active.id}:notion`} />
+                <Editor
+                  key={`${active.id}:notion`}
+                  docId={`${active.id}:notion`}
+                  figmaBoardId={active.figma ? `${active.id}:figma` : undefined}
+                  onFigmaRefClick={handleFigmaRefClick}
+                />
               </div>
             </div>
           ) : (
-            <Canvas key={`${active.id}:figma`} boardId={`${active.id}:figma`} />
+            <Canvas
+              key={`${active.id}:figma`}
+              boardId={`${active.id}:figma`}
+              selectedNodeId={selectedNodeId}
+              onNodeSelect={setSelectedNodeId}
+            />
           )}
         </div>
       </main>

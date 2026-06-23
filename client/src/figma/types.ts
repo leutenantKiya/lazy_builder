@@ -1,8 +1,19 @@
-// The Figma-side node model. This is the seed of the shared doc-model IR:
-// each node maps 1:1 to a positioned element today, and to a React component
-// on export later. A Notion block will reference a node via its `id` (FigmaRef).
+// every canvas element is a CanvasNode. today these map to divs on screen,
+// tomorrow they map to React components on export. the Notion doc references
+// these by id via FigmaRef pills.
 
-export type NodeType = 'frame' | 'box' | 'text' | 'button';
+export type NodeType =
+  | 'frame'
+  | 'box'
+  | 'text'
+  | 'button'
+  | 'input'
+  | 'image'
+  | 'divider'
+  | 'card'
+  | 'badge'
+  | 'toggle'
+  | 'group';
 
 export type CanvasNode = {
   id: string;
