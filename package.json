@@ -6,13 +6,14 @@
     "dev": "tsx watch src/server.ts"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "tsx": "^4.0.0",
     "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.0"
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",
+    "@tiptap/extension-placeholder": "^3.27.1",
     "dotenv": "^17.4.2",
     "tailwindcss": "^4.3.1",
     "ws": "^8.18.0"

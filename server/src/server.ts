@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
-import { setupWSConnection } from "@y/websocket-server/utils";
+// @ts-ignore - y-websocket@1.5 ships no .d.ts for bin/utils (runtime is fine, yjs@13)
+import { setupWSConnection } from "y-websocket/bin/utils";
 import dotenv from "dotenv";
 import path from "path";
  
