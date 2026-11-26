@@ -1,10 +1,9 @@
-import type { Request, Response, NextFunction } from "express";
+import type { ErrorHandler } from "hono";
+import { HTTPException } from "hono/http-exception";
 
-/**
- * Global error handler — catches any unhandled errors thrown
- * inside route handlers / middleware and returns a clean JSON response.
- */
-export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
+// Global error handler: known HTTP errors pass through, anything else is a clean 500.
+export const errorHandler: ErrorHandler = (err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
   console.error("[unhandled]", err);
-  res.status(500).json({ error: "Internal server error." });
-}
+  return c.json({ error: "Internal server error." }, 500);
+};
