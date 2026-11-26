@@ -6,7 +6,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Placeholder from '@tiptap/extension-placeholder';
 import { createLowlight, common } from 'lowlight';
 import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import { connectDoc } from '../lib/collab';
 import { SlashCommand } from './SlashCommand';
 import { FigmaRef } from './FigmaRef';
 import type { CanvasNode } from '../figma/types';
@@ -29,23 +29,20 @@ const Editor = ({
   docId,
   figmaBoardId,
   onFigmaRefClick,
+  readOnly = false,
 }: {
   docId: string;
   figmaBoardId?: string;
   onFigmaRefClick?: (nodeId: string) => void;
+  readOnly?: boolean;
 }) => {
   const [ydoc] = useState(() => new Y.Doc());
   const [figmaRefs, setFigmaRefs] = useState<RefOption[]>([]);
 
   // connect to the Notion doc via Yjs
   useEffect(() => {
-    const provider = new WebsocketProvider('ws://localhost:1234', docId, ydoc);
-    const onStatus = (e: { status: string }) => console.log(`provider[${docId}]:`, e.status);
-    provider.on('status', onStatus);
-    return () => {
-      provider.off('status', onStatus);
-      provider.destroy();
-    };
+    const provider = connectDoc(docId, ydoc);
+    return () => provider.destroy();
   }, [docId, ydoc]);
 
   // tap into the Figma board (read-only) so we can list its nodes for the ref dropdown
@@ -56,11 +53,11 @@ const Editor = ({
     }
     const bdoc = new Y.Doc();
     const bnodes = bdoc.getMap<CanvasNode>('nodes');
-    const provider = new WebsocketProvider('ws://localhost:1234', figmaBoardId, bdoc);
+    const provider = connectDoc(figmaBoardId, bdoc);
     const sync = () =>
       setFigmaRefs(Array.from(bnodes.values()).map((n) => ({ id: n.id, label: nodeLabel(n) })));
     bnodes.observe(sync);
-    provider.on('sync', sync);
+    provider.on('synced', sync);
     return () => {
       bnodes.unobserve(sync);
       provider.destroy();
@@ -69,6 +66,7 @@ const Editor = ({
   }, [figmaBoardId]);
 
   const editor = useEditor({
+    editable: !readOnly,
     extensions: [
       StarterKit.configure({ undoRedo: false, codeBlock: false }),
       Collaboration.configure({ document: ydoc }),
@@ -102,7 +100,7 @@ const Editor = ({
         if (el) onFigmaRefClick?.(el.getAttribute('data-node-id')!);
       }}
     >
-      {figmaBoardId && (
+      {figmaBoardId && !readOnly && (
         <div className="mb-3">
           <select
             value=""

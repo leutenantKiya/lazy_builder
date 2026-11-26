@@ -1,25 +1,29 @@
 {
-  "name": "server",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch src/server.ts"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "lazy-builder-server",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../.env --watch src/index.ts",
+    "start": "bun --env-file=../.env src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
   "dependencies": {
-    "ws": "^8.21.0",
-    "y-websocket": "^1.5.4",
-    "yjs": "^13.6.31"
+    "@hocuspocus/extension-database": "^4.9.0",
+    "@hocuspocus/server": "^4.9.0",
+    "crossws": "^0.4.17",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.22",
+    "postgres": "^3.4.9",
+    "yjs": "^13.6.31",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "@types/ws": "^8.18.1",
-    "tsx": "^4.22.4",
+    "@types/bun": "^1.4.5",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^6.0.3"
   }
 }

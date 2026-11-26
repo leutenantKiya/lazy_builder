@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import { connectDoc } from '../lib/collab';
 import type { CanvasNode, NodeType } from './types';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -153,20 +153,21 @@ export default function Canvas({
   // ── Yjs connection ────────────────────────────────────────────────
 
   useEffect(() => {
-    const provider = new WebsocketProvider('ws://localhost:1234', boardId, ydoc);
+    const provider = connectDoc(boardId, ydoc);
     const sync = () => setNodes(Array.from(ynodes.values()));
     ynodes.observe(sync);
     sync();
 
-    const onSync = (isSynced: boolean) => {
-      if (isSynced && ynodes.size === 0) {
+    // seed a brand-new board; read-only connections can't write, so skip them
+    const onSync = ({ state }: { state: boolean }) => {
+      if (state && ynodes.size === 0 && provider.authorizedScope === 'read-write') {
         ydoc.transact(() => INITIAL_NODES.forEach((n) => ynodes.set(n.id, n)));
       }
     };
-    provider.on('sync', onSync);
+    provider.on('synced', onSync);
 
     return () => {
-      provider.off('sync', onSync);
+      provider.off('synced', onSync);
       ynodes.unobserve(sync);
       provider.destroy();
     };
@@ -542,7 +543,7 @@ export default function Canvas({
     }
   };
 
-  const end = (e?: ReactPointerEvent) => {
+  const end = () => {
     // finish marquee selection
     if (marqueeRef.current && marquee) {
       const x1 = Math.min(marquee.x1, marquee.x2);
@@ -846,7 +847,7 @@ function LayerTree({
             </span>
           )}
 
-          {node.props.docs && <span className="shrink-0 text-[9px]">📄</span>}
+          {Boolean(node.props.docs) && <span className="shrink-0 text-[9px]">📄</span>}
         </div>
 
         {isGroup && isExpanded && children.map((child) => renderNode(child, depth + 1))}
