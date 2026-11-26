@@ -7,6 +7,7 @@
     "dev": "bun --env-file=../.env --watch src/index.ts",
     "start": "bun --env-file=../.env src/index.ts",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -16,6 +17,7 @@
     "@hocuspocus/server": "^4.9.0",
     "crossws": "^0.4.17",
     "drizzle-orm": "^0.45.4",
+    "fflate": "^0.8.3",
     "hono": "^4.13.22",
     "postgres": "^3.4.9",
     "yjs": "^13.6.31",

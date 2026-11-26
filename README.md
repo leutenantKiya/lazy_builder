@@ -74,69 +74,45 @@ When you're done, **export** → get a clean `src/components/*.tsx` + `App.tsx` 
 ### 🌐 Real-Time Collaboration
 - **Yjs CRDT** for conflict-free real-time sync across all connected clients
 - Separate Yjs documents per surface (`{workspaceId}:notion`, `{workspaceId}:figma`)
-- **y-websocket** relay server for multi-client synchronization
+- **Hocuspocus** server checks access on connect and saves every document to Postgres
 - Binary CRDT updates over WebSocket — no server-side conflict resolution needed
 
 ### 🗂️ Workspace Management
-- Multiple workspaces with independent canvas + editor pairs
-- Workspace list persisted in localStorage
-- Inline rename (double-click)
-- Dark mode toggle (persisted)
+- Accounts (email + password) with an httpOnly session cookie
+- Workspaces stored in Postgres, each with its own canvas + editor pair
+- Roles per workspace: **owner**, **editor**, **viewer** (read-only)
+- Invite teammates with a join code
+- Inline rename (double-click), dark mode toggle (persisted)
 
-### 📦 React Export *(planned)*
-- Each canvas node maps 1:1 to a React component
-- Groups become parent components with nested children
-- Outputs a complete Vite + React project scaffold
+### 📦 Export
+- Pick an export stack per workspace: React + Vite today; Next.js, TanStack Start, Vue, SvelteKit, Astro and plain HTML are listed as coming soon
+- **Export** downloads a zip with a runnable project: `npm install && npm run dev`
+- Each canvas group becomes its own component; every primitive used gets a small component in `src/components/ui/`
+- Layout matches the canvas (absolute positioning); per-node docs are kept as code comments
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        BROWSER (Client)                        │
-│                                                                 │
-│  ┌─────────────┐    cross-ref     ┌──────────────────────┐     │
-│  │  Notion      │◄──────────────►│  Figma Canvas         │     │
-│  │  (TipTap +   │  FigmaRef pill  │  (React DOM +         │     │
-│  │   Yjs)       │  click-to-nav   │   CSS transforms)     │     │
-│  └──────┬───────┘                 └──────────┬───────────┘     │
-│         │                                     │                 │
-│         │  binary CRDT updates                │                 │
-│         └──────────────┬──────────────────────┘                 │
-│                        │ WebSocket                              │
-└────────────────────────┼────────────────────────────────────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │   Node.js Server    │
-              │   (y-websocket      │
-              │    relay)           │
-              │                     │
-              │  • merges Yjs deltas│
-              │  • broadcasts to    │
-              │    all peers        │
-              │  • no persistence   │
-              │  • no auth          │
-              └─────────────────────┘
+┌──────────────────────────────── Browser ────────────────────────────────┐
+│  Editor (TipTap + Yjs)  ◄── FigmaRef ──►  Canvas (React DOM + Yjs)      │
+│            │                                     │                      │
+│            └──── HocuspocusProvider (cookie) ────┘    REST (TanStack Query)
+└───────────────────────────│──────────────────────────────────│───────────┘
+                    ws /collab                            http /api
+                            ▼                                  ▼
+              ┌──────────────────────────┐      ┌──────────────────────────┐
+              │ Hocuspocus on Bun.serve  │      │ Hono API on Bun          │
+              │ • JWT + membership check │      │ • auth, workspaces,      │
+              │ • viewers read-only      │      │   members, export (zip)  │
+              │ • debounced persistence  │      │                          │
+              └────────────┬─────────────┘      └────────────┬─────────────┘
+                           └──────────── Postgres ───────────┘
+                         users · workspaces · members · documents (Yjs state)
 ```
 
-### Multi-Client Sync Flow
-
-```
-USER A (browser)               NODE SERVER              USER B (browser)
-┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│ types "h"        │    │ y-websocket      │    │                  │
-│   ↓              │    │ relay            │    │                  │
-│ TipTap edit      │    │                  │    │ Yjs applies      │
-│   ↓              │───►│ (merges +        │───►│ update           │
-│ Y.Doc mutates    │    │  broadcasts      │    │   ↓              │
-│   ↓              │    │  Yjs deltas)     │    │ TipTap re-       │
-│ provider sends   │    │                  │    │ renders → "h"    │
-└──────────────────┘    └──────────────────┘    └──────────────────┘
-   binary CRDT update        WebSocket              update
-   via WebSocket                                    WebSocket
-```
+In development Vite proxies `/api` and `/collab` to the server, so the browser talks to one origin and the auth cookie just works. In production, put the same two paths behind your reverse proxy.
 
 ---
 
@@ -144,34 +120,32 @@ USER A (browser)               NODE SERVER              USER B (browser)
 
 ### Client
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| [React](https://react.dev) | 19 | UI framework — component rendering and state management |
-| [Vite](https://vite.dev) | 8 | Dev server, HMR, and production bundler |
-| [TypeScript](https://www.typescriptlang.org) | 6 | Static typing across the entire client |
-| [TipTap](https://tiptap.dev) | 3 | Headless rich-text editor framework (Notion surface) |
-| [Yjs](https://yjs.dev) | 13 | CRDT library for real-time conflict-free collaboration |
-| [y-websocket](https://github.com/yjs/y-websocket) | 3 | WebSocket provider connecting Yjs to the relay server |
-| [Tailwind CSS](https://tailwindcss.com) | 4 | Utility-first CSS framework |
-| [highlight.js](https://highlightjs.org) | 11 | Syntax highlighting for code blocks in the editor |
-| [lowlight](https://github.com/wooorm/lowlight) | 3 | highlight.js integration for TipTap's CodeBlockLowlight |
-| [@floating-ui/dom](https://floating-ui.com) | 1 | Positioning engine for slash command dropdown |
+| Technology | Purpose |
+|-----------|---------|
+| [React 19](https://react.dev) + [Vite 8](https://vite.dev) + TypeScript | UI, dev server, bundler |
+| [TanStack Router](https://tanstack.com/router) | Routes and the login guard |
+| [TanStack Query](https://tanstack.com/query) | Server state (session, workspaces, export targets) |
+| [TipTap 3](https://tiptap.dev) | Rich-text editor (Notion surface) |
+| [Yjs](https://yjs.dev) + [@hocuspocus/provider](https://tiptap.dev/docs/hocuspocus) | Real-time collaboration |
+| [Tailwind CSS 4](https://tailwindcss.com) | Styling |
 
 ### Server
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| [Node.js](https://nodejs.org) | — | Runtime for the WebSocket relay |
-| [ws](https://github.com/websockets/ws) | 8 | WebSocket server implementation |
-| [y-websocket](https://github.com/yjs/y-websocket) | 1.5 | Yjs WebSocket connection handler (`setupWSConnection`) |
-| [Yjs](https://yjs.dev) | 13 | Server-side CRDT document management |
-| [tsx](https://github.com/privatenumber/tsx) | 4 | TypeScript execution (replaces ts-node) |
-| [dotenv](https://github.com/motdotla/dotenv) | 17 | Environment variable loading |
+| Technology | Purpose |
+|-----------|---------|
+| [Bun](https://bun.sh) | Runtime, password hashing (argon2id), test runner |
+| [Hono](https://hono.dev) | HTTP API |
+| [Hocuspocus](https://tiptap.dev/docs/hocuspocus) + [crossws](https://crossws.h3.dev) | Yjs collaboration server, run on `Bun.serve` |
+| [PostgreSQL](https://www.postgresql.org) + [Drizzle ORM](https://orm.drizzle.team) | Storage and migrations |
+| [zod](https://zod.dev) | Env and request validation |
+| [fflate](https://github.com/101arrowz/fflate) | Zipping exported projects |
 
 ### Why These Choices?
 
 - **React DOM over `<canvas>`**: Canvas nodes *are* DOM elements — they'll export as React components. Using `<canvas>` would add an abstraction layer that needs to be reversed on export.
-- **Yjs CRDTs over OT**: CRDTs are peer-to-peer friendly. The server is a "dumb relay" — no conflict resolution logic. Scales horizontally.
+- **Yjs CRDTs over OT**: CRDTs merge without server-side conflict resolution. The server only checks access and stores the merged state.
+- **Hocuspocus over a hand-rolled relay**: auth hooks and persistence come built in, and it speaks the same protocol TipTap's collaboration extension expects.
+- **Bun + Hono**: one runtime for dev, tests and production, typed routes, and the same code can later run on other runtimes Hono supports.
 - **TipTap over Slate/ProseMirror directly**: TipTap wraps ProseMirror with a batteries-included extension API. Native Yjs collaboration plugin out of the box.
 - **No external canvas library**: Fabric.js, Konva, etc. render to `<canvas>` — wrong abstraction for a tool that exports DOM-based components.
 
@@ -181,39 +155,28 @@ USER A (browser)               NODE SERVER              USER B (browser)
 
 ```
 lazy_builder/
-├── .env                          # VITE_WEBSOCKET_PORT=1234
-├── package.json                  # Root (monorepo-ish)
-├── DOCS.md                       # Detailed file-by-file documentation
-├── README.md                     # ← you are here
-│
-├── client/                       # React SPA (Vite + Tailwind)
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── index.html
+├── .env.example              # copy to .env (never commit .env)
+├── DOCS.md                   # file-by-file documentation
+├── client/                   # React SPA
+│   ├── vite.config.ts        # reads ../.env, proxies /api and /collab
 │   └── src/
-│       ├── main.tsx              # React entry point
-│       ├── App.tsx               # Root component → <Workspace />
-│       ├── App.css               # Tailwind import
-│       ├── index.css             # Global styles + TipTap + highlight.js
-│       │
-│       ├── components/           # Editor surface
-│       │   ├── Editor.tsx        # TipTap editor with Yjs collaboration
-│       │   ├── FigmaRef.ts       # Inline node: cross-reference to canvas
-│       │   ├── SlashCommand.ts   # "/" command palette extension
-│       │   └── SlashMenu.tsx     # Floating dropdown for slash commands
-│       │
-│       ├── figma/                # Canvas surface
-│       │   ├── types.ts          # CanvasNode IR (Intermediate Representation)
-│       │   └── Canvas.tsx        # Infinite canvas with full interaction
-│       │
-│       └── workspace/            # App shell
-│           ├── Workspace.tsx     # Layout, surface tabs, state management
-│           └── FigmaStub.tsx     # (unused placeholder)
-│
-└── server/                       # y-websocket relay (22 lines)
-    ├── package.json
+│       ├── main.tsx          # QueryClient + RouterProvider
+│       ├── router.tsx        # /login, /, /w/$workspaceId
+│       ├── auth/LoginPage.tsx
+│       ├── lib/              # api.ts, queries.ts, collab.ts
+│       ├── components/       # Editor, FigmaRef, SlashCommand, SlashMenu
+│       ├── figma/            # Canvas + IR types
+│       └── workspace/        # app shell
+└── server/
+    ├── drizzle/              # SQL migrations
     └── src/
-        └── server.ts             # WebSocket server for Yjs sync
+        ├── index.ts          # starts the API and the collab server
+        ├── app.ts            # Hono app
+        ├── config/env.ts     # validated env
+        ├── db/               # schema + client
+        ├── collab/server.ts  # Hocuspocus (auth + persistence)
+        ├── routes/           # auth, workspaces, export targets
+        └── export/           # IR, target registry, react-vite generator
 ```
 
 ---
@@ -222,56 +185,50 @@ lazy_builder/
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
-- **npm** (comes with Node.js)
+- [Bun](https://bun.sh) 1.4+
+- PostgreSQL 15+
 
-### Installation
+### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/lazy-builder.git
-cd lazy-builder
-
-# Install root dependencies
-npm install
-
-# Install client dependencies
-cd client && npm install && cd ..
-
-# Install server dependencies
-cd server && npm install && cd ..
+git clone https://github.com/leutenantKiya/lazy_builder.git
+cd lazy_builder
+cp .env.example .env
 ```
 
-### Environment Setup
+Fill in `.env`:
+- `DATABASE_URL`: a Postgres database you own, e.g. `postgres://lazy:lazy@localhost:5432/lazy_builder`
+- `JWT_SECRET`: at least 32 characters, e.g. the output of `openssl rand -base64 48`
 
-The project uses a single `.env` file at the root:
+The server refuses to start if either is missing.
 
-```env
-VITE_WEBSOCKET_PORT=1234
+```bash
+# create the tables
+cd server && bun install && bun run db:migrate && cd ..
+
+cd client && bun install && cd ..
 ```
-
-This is the port the WebSocket relay server listens on. The client reads it via Vite's `import.meta.env`.
 
 ### Running Locally
 
-You need **two terminals**:
-
-| Terminal | Folder | Command | What | Port |
-|----------|--------|---------|------|------|
-| 1 | `client/` | `npm run dev` | Vite frontend | 5173 |
-| 2 | `server/` | `npm run dev` | WebSocket server | 1234 |
+Two terminals:
 
 ```bash
-# Terminal 1 — start the client
-cd client
-npm run dev
-
-# Terminal 2 — start the server
-cd server
-npm run dev
+cd server && bun run dev     # API :3001, collab :1234
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. Open a second tab to see real-time sync in action.
+```bash
+cd client && bun run dev     # http://localhost:5173
+```
+
+Open [http://localhost:5173](http://localhost:5173), register, and create a workspace. Open a second tab (or a second account with the invite code) to see real-time sync.
+
+### Checks
+
+```bash
+cd server && bun run typecheck && bun test
+cd client && bun run build
+```
 
 ---
 
@@ -339,9 +296,11 @@ type CanvasNode = {
 - [x] Layer tree with rename, expand/collapse
 - [x] Dark mode
 - [x] Multiple workspaces
-- [ ] **React export** — IR → Vite + React project scaffold
-- [ ] **Server persistence** — save documents to disk/database
-- [ ] **Authentication** — user accounts and access control
+- [x] **React export** — IR → Vite + React project scaffold
+- [x] **Server persistence** — documents saved to Postgres
+- [x] **Authentication** — user accounts, workspace roles, invite codes
+- [ ] **More export targets** — Next.js, TanStack Start, Vue, SvelteKit, Astro, HTML
+- [ ] **Agent control (MCP)** — let coding agents plan in the editor and build on the canvas
 - [ ] **Undo/redo** — Yjs `UndoManager` integration
 - [ ] **Style editing** — per-node CSS properties (color, padding, font, etc.)
 - [ ] **Component library** — save and reuse custom component groups
@@ -365,7 +324,7 @@ See [`DOCS.md`](./DOCS.md) for detailed file-by-file documentation.
 
 ## 📄 License
 
-This project is open-source. See the [LICENSE](./LICENSE) file for details.
+No license has been chosen yet, so all rights are reserved by default.
 
 ---
 

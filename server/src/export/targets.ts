@@ -1,6 +1,6 @@
 // Stacks a workspace can export its canvas to. The user picks one per workspace
-// (workspaces.export_target). Generators land in Phase 1; until then every
-// target reports `ready: false` and the export endpoint refuses to run.
+// (workspaces.export_target). `ready` targets have a generator in ./index.ts;
+// the rest are listed so the picker shows what's coming.
 
 export type ExportTarget = {
   id: string;
@@ -11,7 +11,7 @@ export type ExportTarget = {
 };
 
 export const EXPORT_TARGETS = [
-  { id: "react-vite", label: "React + Vite", framework: "react", styling: "tailwind", ready: false },
+  { id: "react-vite", label: "React + Vite", framework: "react", styling: "tailwind", ready: true },
   { id: "nextjs", label: "Next.js (App Router)", framework: "react", styling: "tailwind", ready: false },
   { id: "tanstack-start", label: "TanStack Start", framework: "react", styling: "tailwind", ready: false },
   { id: "vue-vite", label: "Vue 3 + Vite", framework: "vue", styling: "tailwind", ready: false },
