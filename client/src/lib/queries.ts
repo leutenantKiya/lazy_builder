@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, type ExportTarget, type Role, type User, type WorkspaceDetail, type WorkspaceSummary } from './api';
+import { api, ApiError, type ExportTarget, type Providers, type Role, type User, type WorkspaceDetail, type WorkspaceSummary } from './api';
 
 // ── Queries ───────────────────────────────
 
@@ -15,6 +15,12 @@ export const meQuery = queryOptions({
     }
   },
   staleTime: 5 * 60_000,
+});
+
+export const providersQuery = queryOptions({
+  queryKey: ['auth-providers'],
+  queryFn: () => api.get<Providers>('/auth/providers'),
+  staleTime: Infinity,
 });
 
 export const workspacesQuery = queryOptions({

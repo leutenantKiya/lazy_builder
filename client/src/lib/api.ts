@@ -30,7 +30,8 @@ export const api = {
 
 // ── Types (mirror server responses) ───────
 
-export type User = { id: string; email: string; name: string | null };
+export type User = { id: string; email: string; name: string | null; avatarUrl: string | null };
+export type Providers = { google: boolean; github: boolean };
 export type Role = 'owner' | 'editor' | 'viewer';
 
 export type WorkspaceSummary = {
