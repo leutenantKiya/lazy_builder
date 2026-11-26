@@ -70,6 +70,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   const [inviteInput, setInviteInput] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [exported, setExported] = useState(false);
+  const [exportTick, setExportTick] = useState(0);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const joinRef = useRef<HTMLInputElement>(null);
   const toastId = useRef(0);
@@ -194,6 +195,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
         setExported(true);
+        setExportTick((n) => n + 1);
         pushToast({
           kind: 'success',
           title: `${filename} downloaded`,
@@ -480,9 +482,9 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
               role="tabpanel"
               id="panel-notion"
               aria-labelledby="tab-notion"
-              className="h-full overflow-auto bg-surface p-4 sm:p-8"
+              className="doc-page h-full overflow-auto px-4 py-8 sm:px-8 sm:py-12"
             >
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto max-w-[70ch]">
                 <Editor
                   key={`${active.id}:notion`}
                   docId={`${active.id}:notion`}
@@ -499,6 +501,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
                 boardId={`${active.id}:figma`}
                 selectedNodeId={selectedNodeId}
                 onNodeSelect={setSelectedNodeId}
+                exportTick={exportTick}
               />
             </div>
           )}

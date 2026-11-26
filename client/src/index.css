@@ -291,3 +291,121 @@ body {
     transform: none;
   }
 }
+
+/* ── Doc editor (system.md 6.7 to 6.9) ── */
+.doc-page {
+  background: var(--lb-surface);
+}
+:root.dark .doc-page {
+  background: var(--lb-bg);
+}
+
+.doc-prose {
+  --tw-prose-body: var(--lb-text);
+  --tw-prose-headings: var(--lb-text);
+  --tw-prose-lead: var(--lb-text-muted);
+  --tw-prose-links: var(--lb-accent-text);
+  --tw-prose-bold: var(--lb-text);
+  --tw-prose-counters: var(--lb-text-muted);
+  --tw-prose-bullets: var(--lb-text-muted);
+  --tw-prose-hr: var(--lb-border);
+  --tw-prose-quotes: var(--lb-text);
+  --tw-prose-quote-borders: var(--lb-border-strong);
+  --tw-prose-captions: var(--lb-text-subtle);
+  --tw-prose-code: var(--lb-text);
+  --tw-prose-th-borders: var(--lb-border-strong);
+  --tw-prose-td-borders: var(--lb-border);
+  max-width: 70ch;
+  font-size: var(--text-doc);
+  line-height: var(--text-doc--line-height);
+}
+.doc-prose h1,
+.doc-prose h2,
+.doc-prose h3 {
+  font-weight: 600;
+  color: var(--lb-text);
+}
+.doc-prose h1 { font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); }
+.doc-prose h2 { font-size: var(--text-xl); line-height: var(--text-xl--line-height); }
+.doc-prose h3 { font-size: var(--text-lg); line-height: var(--text-lg--line-height); }
+.doc-prose a {
+  color: var(--lb-accent-text);
+  font-weight: 400;
+  text-decoration: none;
+}
+.doc-prose a:hover {
+  text-decoration: underline;
+}
+.doc-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  font-weight: 400;
+  background: var(--lb-surface-active);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+.doc-prose code::before,
+.doc-prose code::after {
+  content: none;
+}
+.doc-prose pre code {
+  font-size: inherit;
+  background: transparent;
+  padding: 0;
+}
+
+/* Canvas link pill: the FigmaRef node (system.md 6.7) */
+.figma-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--lb-accent-subtle);
+  color: var(--lb-accent-subtle-text);
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none !important;
+  vertical-align: baseline;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out), transform var(--duration-press) var(--ease-out);
+}
+.figma-ref::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22%3E%3Cpath d=%22M152%2C40a8%2C8%2C0%2C0%2C1-8%2C8H112a8%2C8%2C0%2C0%2C1%2C0-16h32A8%2C8%2C0%2C0%2C1%2C152%2C40Zm-8%2C168H112a8%2C8%2C0%2C0%2C0%2C0%2C16h32a8%2C8%2C0%2C0%2C0%2C0-16ZM208%2C32H184a8%2C8%2C0%2C0%2C0%2C0%2C16h24V72a8%2C8%2C0%2C0%2C0%2C16%2C0V48A16%2C16%2C0%2C0%2C0%2C208%2C32Zm8%2C72a8%2C8%2C0%2C0%2C0-8%2C8v32a8%2C8%2C0%2C0%2C0%2C16%2C0V112A8%2C8%2C0%2C0%2C0%2C216%2C104Zm0%2C72a8%2C8%2C0%2C0%2C0-8%2C8v24H184a8%2C8%2C0%2C0%2C0%2C0%2C16h24a16%2C16%2C0%2C0%2C0%2C16-16V184A8%2C8%2C0%2C0%2C0%2C216%2C176ZM40%2C152a8%2C8%2C0%2C0%2C0%2C8-8V112a8%2C8%2C0%2C0%2C0-16%2C0v32A8%2C8%2C0%2C0%2C0%2C40%2C152Zm32%2C56H48V184a8%2C8%2C0%2C0%2C0-16%2C0v24a16%2C16%2C0%2C0%2C0%2C16%2C16H72a8%2C8%2C0%2C0%2C0%2C0-16ZM72%2C32H48A16%2C16%2C0%2C0%2C0%2C32%2C48V72a8%2C8%2C0%2C0%2C0%2C16%2C0V48H72a8%2C8%2C0%2C0%2C0%2C0-16Z%22/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22%3E%3Cpath d=%22M152%2C40a8%2C8%2C0%2C0%2C1-8%2C8H112a8%2C8%2C0%2C0%2C1%2C0-16h32A8%2C8%2C0%2C0%2C1%2C152%2C40Zm-8%2C168H112a8%2C8%2C0%2C0%2C0%2C0%2C16h32a8%2C8%2C0%2C0%2C0%2C0-16ZM208%2C32H184a8%2C8%2C0%2C0%2C0%2C0%2C16h24V72a8%2C8%2C0%2C0%2C0%2C16%2C0V48A16%2C16%2C0%2C0%2C0%2C208%2C32Zm8%2C72a8%2C8%2C0%2C0%2C0-8%2C8v32a8%2C8%2C0%2C0%2C0%2C16%2C0V112A8%2C8%2C0%2C0%2C0%2C216%2C104Zm0%2C72a8%2C8%2C0%2C0%2C0-8%2C8v24H184a8%2C8%2C0%2C0%2C0%2C0%2C16h24a16%2C16%2C0%2C0%2C0%2C16-16V184A8%2C8%2C0%2C0%2C0%2C216%2C176ZM40%2C152a8%2C8%2C0%2C0%2C0%2C8-8V112a8%2C8%2C0%2C0%2C0-16%2C0v32A8%2C8%2C0%2C0%2C0%2C40%2C152Zm32%2C56H48V184a8%2C8%2C0%2C0%2C0-16%2C0v24a16%2C16%2C0%2C0%2C0%2C16%2C16H72a8%2C8%2C0%2C0%2C0%2C0-16ZM72%2C32H48A16%2C16%2C0%2C0%2C0%2C32%2C48V72a8%2C8%2C0%2C0%2C0%2C16%2C0V48H72a8%2C8%2C0%2C0%2C0%2C0-16Z%22/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.figma-ref:hover {
+  background: var(--lb-accent-subtle-hover);
+}
+.figma-ref:active {
+  transform: scale(0.98);
+}
+.figma-ref[data-state="broken"],
+.figma-ref[data-state="nocanvas"] {
+  background: var(--lb-surface-active);
+  color: var(--lb-text-muted);
+  text-decoration: line-through !important;
+  cursor: not-allowed;
+}
+.figma-ref[data-state="broken"]::before,
+.figma-ref[data-state="nocanvas"]::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22%3E%3Cpath d=%22M198.63%2C57.37a32%2C32%2C0%2C0%2C0-45.19-.06L141.79%2C69.52a8%2C8%2C0%2C0%2C1-11.58-11l11.72-12.29a1.59%2C1.59%2C0%2C0%2C1%2C.13-.13%2C48%2C48%2C0%2C0%2C1%2C67.88%2C67.88%2C1.59%2C1.59%2C0%2C0%2C1-.13.13l-12.29%2C11.72a8%2C8%2C0%2C0%2C1-11-11.58l12.21-11.65A32%2C32%2C0%2C0%2C0%2C198.63%2C57.37ZM114.21%2C186.48l-11.65%2C12.21a32%2C32%2C0%2C0%2C1-45.25-45.25l12.21-11.65a8%2C8%2C0%2C0%2C0-11-11.58L46.19%2C141.93a1.59%2C1.59%2C0%2C0%2C0-.13.13%2C48%2C48%2C0%2C0%2C0%2C67.88%2C67.88%2C1.59%2C1.59%2C0%2C0%2C0%2C.13-.13l11.72-12.29a8%2C8%2C0%2C1%2C0-11.58-11ZM216%2C152H192a8%2C8%2C0%2C0%2C0%2C0%2C16h24a8%2C8%2C0%2C0%2C0%2C0-16ZM40%2C104H64a8%2C8%2C0%2C0%2C0%2C0-16H40a8%2C8%2C0%2C0%2C0%2C0%2C16Zm120%2C80a8%2C8%2C0%2C0%2C0-8%2C8v24a8%2C8%2C0%2C0%2C0%2C16%2C0V192A8%2C8%2C0%2C0%2C0%2C160%2C184ZM96%2C72a8%2C8%2C0%2C0%2C0%2C8-8V40a8%2C8%2C0%2C0%2C0-16%2C0V64A8%2C8%2C0%2C0%2C0%2C96%2C72Z%22/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22%3E%3Cpath d=%22M198.63%2C57.37a32%2C32%2C0%2C0%2C0-45.19-.06L141.79%2C69.52a8%2C8%2C0%2C0%2C1-11.58-11l11.72-12.29a1.59%2C1.59%2C0%2C0%2C1%2C.13-.13%2C48%2C48%2C0%2C0%2C1%2C67.88%2C67.88%2C1.59%2C1.59%2C0%2C0%2C1-.13.13l-12.29%2C11.72a8%2C8%2C0%2C0%2C1-11-11.58l12.21-11.65A32%2C32%2C0%2C0%2C0%2C198.63%2C57.37ZM114.21%2C186.48l-11.65%2C12.21a32%2C32%2C0%2C0%2C1-45.25-45.25l12.21-11.65a8%2C8%2C0%2C0%2C0-11-11.58L46.19%2C141.93a1.59%2C1.59%2C0%2C0%2C0-.13.13%2C48%2C48%2C0%2C0%2C0%2C67.88%2C67.88%2C1.59%2C1.59%2C0%2C0%2C0%2C.13-.13l11.72-12.29a8%2C8%2C0%2C1%2C0-11.58-11ZM216%2C152H192a8%2C8%2C0%2C0%2C0%2C0%2C16h24a8%2C8%2C0%2C0%2C0%2C0-16ZM40%2C104H64a8%2C8%2C0%2C0%2C0%2C0-16H40a8%2C8%2C0%2C0%2C0%2C0%2C16Zm120%2C80a8%2C8%2C0%2C0%2C0-8%2C8v24a8%2C8%2C0%2C0%2C0%2C16%2C0V192A8%2C8%2C0%2C0%2C0%2C160%2C184ZM96%2C72a8%2C8%2C0%2C0%2C0%2C8-8V40a8%2C8%2C0%2C0%2C0-16%2C0V64A8%2C8%2C0%2C0%2C0%2C96%2C72Z%22/%3E%3C/svg%3E");
+}
+.ProseMirror-selectednode.figma-ref {
+  outline: 2px solid var(--lb-focus);
+  outline-offset: 1px;
+}
+
+/* export trace on the canvas (system.md 6.13): the outline draws once, then fades */
+@keyframes lb-trace {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  70% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
