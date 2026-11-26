@@ -271,6 +271,31 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
                   ))}
                 </select>
               </label>
+              {(() => {
+                const target = targets.find((t) => t.id === active.exportTarget);
+                const why = !active.hasCanvas
+                  ? 'Add a Figma page first'
+                  : !target?.ready
+                    ? `${target?.label ?? 'This target'} export is coming soon`
+                    : `Download a ${target.label} project`;
+                const enabled = active.hasCanvas && !!target?.ready;
+                // plain link: same-origin, so the auth cookie rides along and the browser saves the zip
+                return (
+                  <a
+                    href={enabled ? `/api/workspaces/${active.id}/export` : undefined}
+                    download
+                    aria-disabled={!enabled}
+                    title={why}
+                    className={`rounded-md px-3 py-1 text-sm font-medium ${
+                      enabled
+                        ? 'bg-violet-600 text-white hover:bg-violet-700'
+                        : 'cursor-not-allowed bg-neutral-200 text-neutral-400 dark:bg-neutral-800'
+                    }`}
+                  >
+                    Export
+                  </a>
+                );
+              })()}
               {detail?.workspace.inviteCode && (
                 <button
                   onClick={() => navigator.clipboard?.writeText(detail.workspace.inviteCode!)}

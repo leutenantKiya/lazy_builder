@@ -3,7 +3,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db } from "../db/client.ts";
 import { memberRole, users, workspaceMembers, workspaces } from "../db/schema.ts";
-import { EXPORT_TARGET_IDS } from "../export/targets.ts";
+import { hocuspocus } from "../collab/server.ts";
+import { generatorFor, zipProject } from "../export/index.ts";
+import { readCanvas } from "../export/ir.ts";
+import { EXPORT_TARGET_IDS, findTarget } from "../export/targets.ts";
 import { body } from "../lib/validate.ts";
 import { atLeast, getRole, newInviteCode } from "../lib/workspaces.ts";
 import { authenticate, type AuthEnv } from "../middleware/authenticate.ts";
@@ -110,6 +113,36 @@ router.delete("/:id", async (c) => {
   if (role !== "owner") return c.json(forbidden, 403);
   await db.delete(workspaces).where(eq(workspaces.id, id));
   return c.body(null, 204);
+});
+
+// ── Export ─────────────────────────────
+
+// any member (viewers too) can download the canvas as a project zip
+router.get("/:id/export", async (c) => {
+  const id = c.req.param("id");
+  if (!(await getRole(id, c.var.user.sub))) return c.json(notFound, 404);
+  const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, id) });
+  if (!ws) return c.json(notFound, 404);
+  if (!ws.hasCanvas) return c.json({ error: "This workspace has no canvas to export." }, 400);
+
+  const generate = generatorFor(ws.exportTarget);
+  if (!generate) {
+    const label = findTarget(ws.exportTarget)?.label ?? ws.exportTarget;
+    return c.json({ error: `Export to ${label} isn't available yet.` }, 501);
+  }
+
+  // read through Hocuspocus so unsaved (debounced) edits are included
+  const conn = await hocuspocus.openDirectConnection(`${id}:figma`, { user: c.var.user, workspaceId: id });
+  try {
+    const nodes = conn.document ? readCanvas(conn.document) : [];
+    const { filename, bytes } = zipProject(ws.name, generate({ projectName: ws.name, nodes }));
+    return c.body(bytes, 200, {
+      "content-type": "application/zip",
+      "content-disposition": `attachment; filename="${filename}"`,
+    });
+  } finally {
+    await conn.disconnect();
+  }
 });
 
 // ── Members ────────────────────────────
