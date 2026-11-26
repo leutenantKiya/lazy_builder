@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import Editor from '../components/Editor';
 import Canvas from '../figma/Canvas';
+import { useTheme } from '../lib/theme';
 import type { WorkspaceSummary } from '../lib/api';
 import {
   exportTargetsQuery,
@@ -41,16 +42,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   const [editWsName, setEditWsName] = useState('');
   const [inviteInput, setInviteInput] = useState('');
 
-  const [dark, setDark] = useState(
-    () =>
-      localStorage.theme === 'dark' ||
-      (!('theme' in localStorage) &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches)
-  );
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.theme = dark ? 'dark' : 'light';
-  }, [dark]);
+  const [dark, toggleTheme] = useTheme();
 
   // unknown id (deleted, removed from it, typo) -> back to the index
   useEffect(() => {
@@ -203,7 +195,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setDark((v) => !v)}
+                onClick={toggleTheme}
                 className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
               >
                 {dark ? '☀️ Light' : '🌙 Dark'}

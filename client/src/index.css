@@ -1,5 +1,6 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark.css";
+@import "highlight.js/styles/github.css";
+@import "./hljs-dark.css";
 @plugin "@tailwindcss/typography";
 
 /* enable class-based dark mode: `dark:` applies when <html class="dark"> */
@@ -10,26 +11,271 @@ body {
   margin: 0;
 }
 
-/* Notion editor: branded caret + breathing "Type Here" placeholder */
-.tiptap {
-  caret-color: #8b5cf6;
+body {
+  @apply bg-bg font-sans text-text;
 }
 
-.tiptap p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  color: #9ca3af;
-  animation: breathe 2s ease-in-out infinite;
+/* code blocks follow the theme (system.md 6.9) */
+.tiptap pre {
+  background: #f3f3f7;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+}
+:root.dark .tiptap pre {
+  background: #0e0e16;
+}
+.tiptap pre code.hljs {
+  background: transparent;
+  padding: 0;
 }
 
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 0.35;
+/* ── Light values (also the fallback before the theme class is set) ── */
+:root {
+  --lb-bg: #f7f7fa;
+  --lb-surface: #ffffff;
+  --lb-surface-raised: #ffffff;
+  --lb-surface-hover: #f0f0f5;
+  --lb-surface-active: #ececf2;
+  --lb-canvas: #efeff4;
+
+  --lb-border: #e2e2ea;          /* decorative separators only */
+  --lb-border-strong: #7a7a90;   /* control boundaries: inputs, secondary buttons (>= 3:1) */
+
+  --lb-text: #15151e;
+  --lb-text-muted: #50506a;
+  --lb-text-subtle: #6a6a80;     /* captions, shortcuts; >= 4.5:1 on bg/surface/canvas */
+  --lb-text-disabled: #8a8aa0;   /* disabled only (exempt from 4.5:1) */
+
+  --lb-accent: #6a45f5;          /* primary button fill, active marks */
+  --lb-accent-hover: #5b3be0;
+  --lb-accent-pressed: #4e30c9;
+  --lb-accent-fg: #ffffff;
+  --lb-accent-text: #5b3be0;     /* violet text/links on surfaces */
+  --lb-accent-subtle: #eee9ff;   /* pill background */
+  --lb-accent-subtle-text: #4b2fc4;
+  --lb-accent-subtle-hover: #e2d9ff;
+
+  --lb-focus: #6a45f5;
+
+  --lb-success: #117a3a;
+  --lb-success-subtle: #e6f6ec;
+  --lb-warning: #9a5b00;
+  --lb-warning-subtle: #fdf3e1;
+  --lb-danger: #c62828;
+  --lb-danger-fill: #c62828;
+  --lb-danger-fg: #ffffff;
+  --lb-danger-subtle: #fdecec;
+
+  /* canvas chrome */
+  --lb-selection: #6a45f5;
+  --lb-selection-halo: rgb(106 69 245 / 0.18);
+  --lb-guide: #0e7490;
+  --lb-group-outline: #7c6fd0;
+  --lb-marquee: #6a45f5;
+  --lb-marquee-fill: rgb(106 69 245 / 0.08);
+  --lb-handle-fill: #ffffff;
+  --lb-hud-bg: #15151e;
+  --lb-hud-text: #ffffff;
+
+  --lb-shadow-float: 0 1px 2px rgb(21 21 30 / 0.08), 0 8px 24px rgb(21 21 30 / 0.12);
+  --lb-shadow-dialog: 0 2px 4px rgb(21 21 30 / 0.08), 0 24px 48px rgb(21 21 30 / 0.18);
+
+  color-scheme: light;
+}
+
+/* ── Dark values (primary theme) ── */
+:root.dark {
+  --lb-bg: #0b0b12;
+  --lb-surface: #12121b;
+  --lb-surface-raised: #1a1a26;
+  --lb-surface-hover: #1c1c29;
+  --lb-surface-active: #1f1f2e;
+  --lb-canvas: #0e0e16;
+
+  --lb-border: #26263a;
+  --lb-border-strong: #6b6b85;
+
+  --lb-text: #ececf4;
+  --lb-text-muted: #a1a1b5;
+  --lb-text-subtle: #8a8aa0;
+  --lb-text-disabled: #6b6b85;
+
+  --lb-accent: #6a45f5;
+  --lb-accent-hover: #5b3be0;
+  --lb-accent-pressed: #4e30c9;
+  --lb-accent-fg: #ffffff;
+  --lb-accent-text: #b9a6ff;
+  --lb-accent-subtle: #241d45;
+  --lb-accent-subtle-text: #cfc2ff;
+  --lb-accent-subtle-hover: #2b2052;
+
+  --lb-focus: #b9a6ff;
+
+  --lb-success: #3dd68c;
+  --lb-success-subtle: #102219;
+  --lb-warning: #f5b544;
+  --lb-warning-subtle: #2a1f0c;
+  --lb-danger: #ff7a7a;
+  --lb-danger-fill: #c93a3a;
+  --lb-danger-fg: #ffffff;
+  --lb-danger-subtle: #2a1416;
+
+  --lb-selection: #a78bfa;
+  --lb-selection-halo: rgb(167 139 250 / 0.22);
+  --lb-guide: #22d3ee;
+  --lb-group-outline: #8b7fd6;
+  --lb-marquee: #a78bfa;
+  --lb-marquee-fill: rgb(167 139 250 / 0.10);
+  --lb-handle-fill: #0e0e16;
+  --lb-hud-bg: #1a1a26;
+  --lb-hud-text: #ececf4;
+
+  --lb-shadow-float: 0 0 0 1px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.45);
+  --lb-shadow-dialog: 0 0 0 1px rgb(0 0 0 / 0.2), 0 24px 48px rgb(0 0 0 / 0.55);
+
+  color-scheme: dark;
+}
+
+/* ── Tailwind theme: utilities read the variables, so `dark:` pairs are no longer needed ── */
+@theme inline {
+  --color-bg: var(--lb-bg);
+  --color-surface: var(--lb-surface);
+  --color-surface-raised: var(--lb-surface-raised);
+  --color-surface-hover: var(--lb-surface-hover);
+  --color-surface-active: var(--lb-surface-active);
+  --color-canvas: var(--lb-canvas);
+
+  --color-border: var(--lb-border);
+  --color-border-strong: var(--lb-border-strong);
+
+  --color-text: var(--lb-text);
+  --color-text-muted: var(--lb-text-muted);
+  --color-text-subtle: var(--lb-text-subtle);
+  --color-text-disabled: var(--lb-text-disabled);
+
+  --color-accent: var(--lb-accent);
+  --color-accent-hover: var(--lb-accent-hover);
+  --color-accent-pressed: var(--lb-accent-pressed);
+  --color-accent-fg: var(--lb-accent-fg);
+  --color-accent-text: var(--lb-accent-text);
+  --color-accent-subtle: var(--lb-accent-subtle);
+  --color-accent-subtle-text: var(--lb-accent-subtle-text);
+  --color-accent-subtle-hover: var(--lb-accent-subtle-hover);
+
+  --color-focus: var(--lb-focus);
+
+  --color-success: var(--lb-success);
+  --color-success-subtle: var(--lb-success-subtle);
+  --color-warning: var(--lb-warning);
+  --color-warning-subtle: var(--lb-warning-subtle);
+  --color-danger: var(--lb-danger);
+  --color-danger-fill: var(--lb-danger-fill);
+  --color-danger-fg: var(--lb-danger-fg);
+  --color-danger-subtle: var(--lb-danger-subtle);
+
+  --color-selection: var(--lb-selection);
+  --color-selection-halo: var(--lb-selection-halo);
+  --color-guide: var(--lb-guide);
+  --color-group-outline: var(--lb-group-outline);
+  --color-marquee: var(--lb-marquee);
+  --color-marquee-fill: var(--lb-marquee-fill);
+  --color-handle-fill: var(--lb-handle-fill);
+  --color-hud-bg: var(--lb-hud-bg);
+  --color-hud-text: var(--lb-hud-text);
+
+  --shadow-float: var(--lb-shadow-float);
+  --shadow-dialog: var(--lb-shadow-dialog);
+}
+
+@theme {
+  /* type */
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --text-2xs: 0.6875rem;  --text-2xs--line-height: 1rem;      /* 11/16 canvas chrome labels only */
+  --text-xs: 0.75rem;     --text-xs--line-height: 1rem;       /* 12/16 captions, shortcuts */
+  --text-sm: 0.8125rem;   --text-sm--line-height: 1.25rem;    /* 13/20 default UI text */
+  --text-base: 0.875rem;  --text-base--line-height: 1.375rem; /* 14/22 inputs, login body */
+  --text-doc: 1rem;       --text-doc--line-height: 1.625rem;  /* 16/26 editor body */
+  --text-lg: 1.25rem;     --text-lg--line-height: 1.75rem;    /* 20/28 editor h3, dialog title */
+  --text-xl: 1.5rem;      --text-xl--line-height: 2rem;       /* 24/32 editor h2, login title */
+  --text-2xl: 1.875rem;   --text-2xl--line-height: 2.375rem;  /* 30/38 editor h1 */
+  --text-display: 3rem;   --text-display--line-height: 1;     /* 48/48 login headline (>=1024px) */
+
+  /* radius */
+  --radius-xs: 2px;    /* resize handles */
+  --radius-sm: 4px;    /* pills, kbd, badges, Google button (rectangular) */
+  --radius-md: 6px;    /* buttons, inputs, select, tabs, list rows */
+  --radius-lg: 8px;    /* menus, popovers, panels, toasts */
+  --radius-xl: 12px;   /* login card, dialogs */
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-press: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --duration-moment: 400ms;
+}
+
+/* ── Base layer: focus, cursor, selection, reduced motion ── */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--lb-bg);
+    color: var(--lb-text);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 0;
   }
-  50% {
-    opacity: 0.9;
+
+  :focus-visible {
+    outline: 2px solid var(--lb-focus);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  select:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background: var(--lb-accent-subtle);
+    color: var(--lb-text);
+  }
+
+  .tiptap {
+    caret-color: var(--lb-accent-text);
+  }
+  /* static placeholder: the old endless "breathe" loop is removed */
+  .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--lb-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
