@@ -68,12 +68,12 @@ export default function LoginPage() {
             {/* full-page navigation: the server redirects to Google and back */}
             <a
               href="/api/auth/google"
-              className="flex w-full items-center justify-center gap-3 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50 dark:border-neutral-600"
+              className="flex w-full items-center justify-center gap-3 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 dark:border-neutral-600 dark:focus-visible:outline-violet-400"
             >
               <GoogleMark />
               Continue with Google
             </a>
-            <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400">
               <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-700" />
               or
               <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-700" />
