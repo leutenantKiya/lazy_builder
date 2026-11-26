@@ -279,3 +279,15 @@ body {
     }
   }
 }
+
+/* login card entrance: once, opacity + 8px rise (reduced motion collapses it via the base layer) */
+@keyframes lb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
