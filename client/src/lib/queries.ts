@@ -108,3 +108,10 @@ export function useJoinWorkspace() {
     onSuccess: () => qc.invalidateQueries({ queryKey: workspacesQuery.queryKey }),
   });
 }
+
+// fetch -> blob so the caller knows the download really finished (or why it didn't)
+export function useExportWorkspace() {
+  return useMutation({
+    mutationFn: (id: string) => api.download(`/workspaces/${id}/export`),
+  });
+}

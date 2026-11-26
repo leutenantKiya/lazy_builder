@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { CircleNotch, Warning } from '@phosphor-icons/react';
 import { providersQuery, useAuthMutation } from '../lib/queries';
+import Monogram from '../components/Monogram';
 import LoginPoster from './LoginPoster';
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -90,12 +91,7 @@ export default function LoginPage() {
 
           <div className="animate-[lb-rise_var(--duration-moment)_var(--ease-out)_both] rounded-xl bg-surface p-5 sm:p-8 dark:border dark:border-border">
             <div className="mb-6 flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="flex h-4 w-4 items-center justify-center rounded-sm bg-accent text-[10px] font-semibold leading-none text-accent-fg"
-              >
-                L
-              </span>
+              <Monogram />
               <span className="text-sm font-medium text-text">Lazy Builder</span>
             </div>
 
