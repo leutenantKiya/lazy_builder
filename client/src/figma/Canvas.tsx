@@ -177,10 +177,11 @@ export default function Canvas({
       } else {
         next.add(id);
       }
-      setLastSelectedId(id);
-      onNodeSelect?.(id);
       return next;
     });
+    // outside the updater: updaters must be pure, and this sets parent state
+    setLastSelectedId(id);
+    onNodeSelect?.(id);
   }, [onNodeSelect]);
 
   // called when user clicks a FigmaRef in the Notion doc
