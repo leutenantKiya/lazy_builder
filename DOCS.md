@@ -6,66 +6,52 @@ A real-time collaborative workspace with two surfaces: a Notion-like block edito
 
 ## Project Structure
 
-```
-lazy_builder/
-├── .env                          # Environment config (VITE_WEBSOCKET_PORT)
-├── package.json                  # Root package (server deps + some misplaced client deps)
-├── DOCS.md                       # ← you are here
-│
-├── client/                       # React SPA (Vite)
-│   ├── package.json              # Client dependencies
-│   ├── vite.config.ts            # Vite + Tailwind + React plugin config
-│   ├── tsconfig*.json            # TypeScript configs
-│   ├── index.html                # HTML entry point
-│   ├── public/                   # Static assets
-│   └── src/
-│       ├── main.tsx              # React entry point
-│       ├── App.tsx               # Root component (renders Workspace)
-│       ├── App.css               # Tailwind import
-│       ├── index.css             # Global styles (Tailwind, highlight.js, TipTap)
-│       │
-│       ├── components/           # Editor-related components
-│       │   ├── Editor.tsx        # TipTap rich-text editor with Yjs collaboration
-│       │   ├── FigmaRef.ts       # TipTap inline node: cross-surface link to canvas
-│       │   ├── SlashCommand.ts   # TipTap extension: "/" command palette
-│       │   └── SlashMenu.tsx     # React component: floating dropdown for slash commands
-│       │
-│       ├── figma/                # Canvas system
-│       │   ├── types.ts          # CanvasNode type + NodeType union (the IR seed)
-│       │   └── Canvas.tsx        # Infinite canvas: nodes, drag, resize, grouping, layers
-│       │
-│       └── workspace/            # App shell
-│           ├── Workspace.tsx     # Top-level layout: sidebar, surface tabs, state mgmt
-│           └── FigmaStub.tsx     # Dead placeholder (unused, from earlier phase)
-│
-└── server/                       # y-websocket relay
-    ├── package.json              # Server dependencies
-    └── src/
-        └── server.ts             # Minimal WebSocket relay for Yjs sync
-```
+See the tree in [README.md](./README.md#-project-structure). This file goes through each piece.
 
 ---
 
 ## Root Files
 
-### `.env`
-```
-VITE_WEBSOCKET_PORT=1234
-```
-Single config: the port the y-websocket server listens on. Client reads this via Vite's `import.meta.env`.
+### `.env` / `.env.example`
+One `.env` at the repo root serves both apps (`client/vite.config.ts` sets `envDir: '..'`, the server's scripts use `bun --env-file=../.env`). `.env` is git-ignored; `.env.example` lists every variable:
+
+| Variable | Used by | Purpose |
+|----------|---------|---------|
+| `DATABASE_URL` | server | Postgres connection string (required) |
+| `JWT_SECRET` | server | Signs session tokens, ≥32 chars (required) |
+| `JWT_EXPIRES_IN_SECONDS` | server | Session length, default 7 days |
+| `PORT` / `COLLAB_PORT` | server, Vite proxy | HTTP API (3001) and collab WebSocket (1234) |
+| `CLIENT_ORIGIN` | server | CORS origin for `/api` |
+| `VITE_COLLAB_URL` | client | Optional override for the collab URL in production |
 
 ### `package.json` (root)
-Named `"server"` (historical accident). Contains a mix of server deps (`ws`, `dotenv`, `tsx`) and misplaced client deps (`tailwindcss`, `@tiptap/extension-placeholder`). The actual server runs from `server/package.json`. This file's `dev` script points at a nonexistent `src/server.ts` at root — ignore it.
+Left over from the original layout and not used by either app. Each app has its own `package.json` and `bun.lock`.
 
 ---
 
 ## Client — Entry & Global
 
 ### `client/src/main.tsx`
-React 19 entry point. Mounts `<App />` into `#root` with `StrictMode`. Standard Vite scaffold.
+React 19 entry point. Wraps the app in `QueryClientProvider` and `RouterProvider`.
 
-### `client/src/App.tsx`
-Single line: renders `<Workspace />`. No routing, no providers — all state lives in Workspace.
+### `client/src/router.tsx`
+TanStack Router, code-based routes:
+
+| Route | Guard | Renders |
+|-------|-------|---------|
+| `/login` | redirects to `/` when logged in | `LoginPage` |
+| `/` | needs a session | redirects to the first workspace, or the empty state |
+| `/w/$workspaceId` | needs a session | `Workspace` for that id |
+
+Guards call `queryClient.ensureQueryData(meQuery)`, so the session check is cached and shared with the rest of the app.
+
+### `client/src/lib/api.ts`, `queries.ts`, `collab.ts`
+- `api.ts`: `fetch` wrapper for `/api` that throws `ApiError(status, message)`, plus the response types.
+- `queries.ts`: TanStack Query options and mutations (session, workspaces, export targets, create/update/delete/join, login/logout).
+- `collab.ts`: `connectDoc(name, ydoc)` returns a `HocuspocusProvider`. No token is passed; the browser sends the httpOnly cookie on the WebSocket upgrade.
+
+### `client/src/auth/LoginPage.tsx`
+Login and register in one form. On success it seeds the `me` query and navigates to `/`.
 
 ### `client/src/App.css`
 Just `@import "tailwindcss"`. Loads Tailwind CSS 4 via the Vite plugin.
@@ -89,9 +75,10 @@ Global styles:
 - `docId: string` — Yjs room name (e.g., `"workspace-id:notion"`)
 - `figmaBoardId?: string` — if set, connects to the Figma board to list nodes for cross-referencing
 - `onFigmaRefClick?: (nodeId: string) => void` — callback when a FigmaRef pill is clicked
+- `readOnly?: boolean` — viewers get a non-editable editor and no ref picker
 
 **What it does:**
-- Creates a `Y.Doc` + `WebsocketProvider` for the Notion doc
+- Creates a `Y.Doc` and connects it with `connectDoc` (Hocuspocus)
 - If `figmaBoardId` is set, opens a second read-only Yjs connection to the Figma board to populate the "Insert Figma ref" dropdown
 - Renders TipTap with extensions: StarterKit, Collaboration, CodeBlockLowlight, Placeholder, FigmaRef, SlashCommand
 - Click delegation: clicks on `[data-node-id]` elements fire `onFigmaRefClick` (cross-surface nav)
@@ -212,9 +199,9 @@ type CanvasNode = {
 #### Yjs Connection
 
 - Creates `Y.Doc` + `Y.Map<CanvasNode>('nodes')` per mount
-- `WebsocketProvider` connects to `ws://localhost:1234` with `boardId` as room name
+- `connectDoc(boardId, ydoc)` connects through Hocuspocus
 - Observes map changes → mirrors to React state
-- Seeds demo nodes on first sync if map is empty
+- Seeds demo nodes on first sync if the map is empty and the connection is read-write
 
 #### Coordinate System
 
@@ -310,61 +297,68 @@ Pure visual rendering per node type. No state, no interaction — just the style
 ## Client — Workspace Shell
 
 ### `client/src/workspace/Workspace.tsx`
-**The app shell.** Manages workspaces, surface switching, and cross-surface navigation.
+**The app shell.** Takes `workspaceId` from the route; workspace data comes from the API.
 
 **Layout:**
-- **Sidebar (left):** workspace list, dark mode toggle, collapsed → hamburger button
-- **Navbar (top):** surface tabs (Notion / Figma), workspace name
-- **Main area:** either Editor (Notion surface) or Canvas (Figma surface)
+- **Sidebar (left):** workspace list (double-click to rename), new workspace, join with invite code, account, dark mode, log out
+- **Toolbar (top):** surface tabs (Notion / Figma), "Add Figma page", export target picker, **Export**, invite code (owners), Delete (owners)
+- **Main area:** Editor, Canvas, or the empty state when the user has no workspaces
 
-**State:**
+**Data:** `workspacesQuery` (list with the caller's role), `workspaceQuery(id)` (detail, including the invite code for owners), `exportTargetsQuery`. Mutations invalidate the list so the sidebar stays current.
 
-| State | Persisted | Purpose |
-|-------|-----------|---------|
-| `workspaces` | localStorage | List of `{ id, name, figma }` |
-| `activeId` | — | Current workspace ID |
-| `surface` | — | `'notion'` or `'figma'` |
-| `sidebarOpen` | — | Sidebar visibility |
-| `selectedNodeId` | — | Cross-surface selection target |
-| `editingWsId` | — | Which workspace name is being edited |
-| `editWsName` | — | Edit buffer for workspace rename |
-| `dark` | localStorage (`theme`) | Dark mode toggle |
+**Local state:** `surface`, `sidebarOpen`, `selectedNodeId`, rename buffer, invite input, `dark` (localStorage).
 
-**Workspace data:** `{ id: string, name: string, figma: boolean }`. Stored in localStorage under `lazy-builder-workspaces`. Default: one "Welcome" workspace with Figma enabled.
+**Viewers:** `role === 'viewer'` makes the editor read-only and hides edit controls. The server enforces this too; the canvas has no read-only mode yet, so a viewer's local changes are rejected by the server and disappear on reload.
 
-**Surface switching:**
-- Tab click → set surface
-- FigmaRef click → set surface to 'figma' + set `selectedNodeId`
-- Workspace switch → reset to 'notion'
-
-**Workspace renaming:** Double-click workspace name → inline input → Enter/blur to commit, Escape to cancel.
-
-**Cross-surface nav:** `handleFigmaRefClick(nodeId)` → sets `selectedNodeId` + switches to Figma surface → Canvas receives `selectedNodeId` prop → selects that node.
+**Export:** a plain `<a href="/api/workspaces/:id/export" download>`. Disabled when the workspace has no canvas or the chosen target isn't ready.
 
 **Yjs room naming:** `{workspaceId}:notion` for the editor, `{workspaceId}:figma` for the canvas.
 
 ### `client/src/workspace/FigmaStub.tsx`
-**Dead code.** A placeholder component from before Canvas.tsx was built. Not imported anywhere. Safe to delete.
+**Dead code.** A placeholder from before Canvas.tsx existed. Not imported anywhere.
 
 ---
 
 ## Server
 
-### `server/src/server.ts`
-**Minimal y-websocket relay.** 22 lines.
+### `server/src/index.ts`
+Starts two `Bun.serve` instances: the Hono API on `PORT` and the collab WebSocket on `COLLAB_PORT`. On SIGINT/SIGTERM it closes collab connections, flushes pending document writes, then closes the DB pool.
 
-**What it does:**
-1. Loads `.env` for `VITE_WEBSOCKET_PORT`
-2. Creates a `WebSocketServer` on that port
-3. On each connection: delegates to `setupWSConnection` from `y-websocket/bin/utils`
+### `server/src/config/env.ts`
+Validates the environment with zod and exits on boot if `DATABASE_URL` or `JWT_SECRET` (≥32 chars) is missing.
 
-**What it does NOT do:**
-- No persistence (in-memory only)
-- No authentication
-- No data transformation
-- No awareness (cursor positions, etc.)
+### `server/src/db/schema.ts` + `server/drizzle/`
+Drizzle schema and generated SQL migrations.
 
-**How Yjs sync works:** Each Yjs document (identified by room name) is stored in memory. When a client connects to a room, the server relays updates between all connected clients. When all clients disconnect, the document is garbage collected.
+| Table | Key columns |
+|-------|-------------|
+| `users` | `email` (unique), `password_hash` (argon2id via `Bun.password`) |
+| `workspaces` | `owner_id`, `has_canvas`, `export_target`, `invite_code` (unique) |
+| `workspace_members` | (`workspace_id`, `user_id`) primary key, `role`: owner/editor/viewer |
+| `documents` | `name` = `{workspaceId}:{notion\|figma}`, `state` (Yjs update, `bytea`) |
+
+Change the schema, then `bun run db:generate` to write a new migration and `bun run db:migrate` to apply it.
+
+### `server/src/routes/`
+- `auth.routes.ts`: `POST /register`, `POST /login`, `POST /logout`, `GET /me`. Login sets an httpOnly `token` cookie and also returns the token so agents/CLIs can send it as `Authorization: Bearer`.
+- `workspace.routes.ts`: list/create/get/update/delete, `POST /join` (invite code), members (list, change role, remove/leave), and `GET /:id/export`.
+- `export.routes.ts`: `GET /targets`, the stacks the picker shows.
+
+Non-members get **404** for a workspace (not 403), so ids can't be probed.
+
+### `server/src/collab/server.ts`
+Hocuspocus core on `Bun.serve` through the crossws Bun adapter (Hocuspocus' own `Server` class only runs on Node).
+- `onAuthenticate`: parses the doc name, reads the JWT from the cookie (or the provider token), checks membership, sets `readOnly` for viewers.
+- `Database` extension: `fetch` loads `documents.state`, `store` upserts it (debounced by Hocuspocus).
+
+### `server/src/export/`
+- `ir.ts`: server copy of the `CanvasNode` type and `readCanvas(ydoc)`.
+- `targets.ts`: every target the picker lists; `ready` marks the ones with a generator.
+- `index.ts`: generator registry and `zipProject` (one top-level folder per zip).
+- `react-vite/generate.ts`: IR → file map. Groups become components (named from their label), used primitives get a component in `src/components/ui/`, positions are normalized to a padded origin, all text goes through `JSON.stringify` so nothing can break out of JSX.
+- `react-vite/generate.test.ts`: `bun test`. The kitchen-sink fixture also builds with `tsc -b && vite build`.
+
+The export route reads the canvas through `hocuspocus.openDirectConnection`, so edits that haven't been saved yet are included.
 
 ---
 
@@ -382,8 +376,8 @@ Loose typing for rapid prototyping. Each node type stores what it needs. Will ti
 ### Why children use relative coordinates?
 Groups are positioned containers. Children inside use coords relative to the group. This makes group drag O(1) — only the group node moves. DOM handles child positioning automatically.
 
-### Why localStorage for workspaces?
-No server persistence yet. localStorage is per-browser, sufficient for prototype. Will move to server-side storage when multi-device sync is needed.
+### Why one origin in dev?
+Vite proxies `/api` and `/collab`, so the session cookie is first-party for both REST and WebSocket and the client never handles a token. Production does the same with a reverse proxy.
 
 ---
 
@@ -403,12 +397,12 @@ Drag group → only group moves in Yjs → children follow via DOM
 Resize group → children scale proportionally
 ```
 
-### Export flow (planned)
+### Export flow
 ```
-CanvasNode tree → per-type React component → Vite project scaffold
-frame → <Frame> wrapper
-button → <button> with label
-group → parent component with children nested
-input → <input> with placeholder
-→ src/components/*.tsx + App.tsx + vite.config.ts + package.json
+Toolbar "Export" → GET /api/workspaces/:id/export
+  → membership check, has_canvas, target has a generator
+  → openDirectConnection("{id}:figma") → readCanvas → CanvasNode[]
+  → generateReactVite → { path: source }
+  → zipProject → my-workspace.zip (my-workspace/…)
+Unzip → npm install → npm run dev
 ```
