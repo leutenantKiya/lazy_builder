@@ -126,12 +126,15 @@ export default function Canvas({
   selectedNodeId,
   onNodeSelect,
   exportTick = 0,
+  readOnly = false,
 }: {
   boardId: string;
   selectedNodeId?: string | null;
   onNodeSelect?: (id: string | null) => void;
   /** bumps once per successful export; the canvas traces node outlines in response */
   exportTick?: number;
+  /** viewers: look, select and zoom, but nothing that writes to the board */
+  readOnly?: boolean;
 }) {
   const [{ ydoc, ynodes }] = useState(() => {
     const ydoc = new Y.Doc();
@@ -232,12 +235,14 @@ export default function Canvas({
       // Ctrl+G → group
       if (mod && e.key === 'g' && !e.shiftKey) {
         e.preventDefault();
+        if (readOnly) return;
         groupSelected();
         return;
       }
       // Ctrl+Shift+G → ungroup
       if (mod && e.key === 'g' && e.shiftKey) {
         e.preventDefault();
+        if (readOnly) return;
         ungroupSelected();
         return;
       }
@@ -245,6 +250,7 @@ export default function Canvas({
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // skip if user is typing somewhere
         if ((e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'INPUT') return;
+        if (readOnly) return;
         e.preventDefault();
         deleteSelected();
         return;
@@ -265,7 +271,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [nodes, selectedIds]);
+  }, [nodes, selectedIds, readOnly]);
 
   // ── Coordinate conversion ──────────────────────────────────────────
 
@@ -299,6 +305,7 @@ export default function Canvas({
   // ── Node CRUD ──────────────────────────────────────────────────────
 
   const addNode = (type: NodeType) => {
+    if (readOnly) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2 - view.tx) / view.scale : 80;
     const cy = rect ? (rect.height / 2 - view.ty) / view.scale : 80;
@@ -317,6 +324,7 @@ export default function Canvas({
   };
 
   const deleteSelected = () => {
+    if (readOnly) return;
     if (!selectedIds.size) return;
     ydoc.transact(() => {
       for (const id of selectedIds) {
@@ -346,6 +354,7 @@ export default function Canvas({
   };
 
   const updateDocs = (docs: string) => {
+    if (readOnly) return;
     if (!lastSelectedId) return;
     const node = ynodes.get(lastSelectedId);
     if (!node) return;
@@ -353,6 +362,7 @@ export default function Canvas({
   };
 
   const renameNode = (id: string, name: string) => {
+    if (readOnly) return;
     const node = ynodes.get(id);
     if (!node) return;
     const key = ['text', 'badge'].includes(node.type) ? 'text' : node.type === 'input' ? 'placeholder' : 'label';
@@ -370,6 +380,7 @@ export default function Canvas({
   // ── Group / Ungroup ────────────────────────────────────────────────
 
   const groupSelected = () => {
+    if (readOnly) return;
     // need at least 2 ungrouped nodes selected
     const toGroup = Array.from(selectedIds)
       .map((id) => ynodes.get(id))
@@ -408,6 +419,7 @@ export default function Canvas({
   };
 
   const ungroupSelected = () => {
+    if (readOnly) return;
     const groups = Array.from(selectedIds)
       .map((id) => ynodes.get(id))
       .filter((n): n is CanvasNode => !!n && n.type === 'group');
@@ -443,6 +455,7 @@ export default function Canvas({
   const MIN_SIZE = 20;
 
   const startResize = (e: ReactPointerEvent, nodeId: string, dir: HandleDir) => {
+    if (readOnly) return;
     e.stopPropagation();
     const node = ynodes.get(nodeId);
     if (!node) return;
@@ -519,6 +532,7 @@ export default function Canvas({
     if (!selectedIds.has(node.id)) {
       selectSingle(node.id);
     }
+    if (readOnly) return;
 
     const w = toWorld(e.clientX, e.clientY);
 
@@ -689,6 +703,7 @@ export default function Canvas({
               zoom={view.scale}
               onPointerDown={(e) => startDrag(e, node)}
               onResizeStart={startResize}
+              editable={!readOnly}
             />
           ))}
 
@@ -789,6 +804,12 @@ export default function Canvas({
         aria-label="Canvas tools"
         className="flex w-[232px] shrink-0 flex-col gap-5 overflow-auto border-l border-border bg-surface p-3"
       >
+        {readOnly ? (
+          <p className="rounded-md bg-surface-hover px-2.5 py-2 text-xs text-text-muted">
+            View only. You can select, zoom and read docs, but not change the canvas.
+          </p>
+        ) : (
+        <>
         <section aria-labelledby="canvas-add">
           <h3 id="canvas-add" className={`mb-2 ${sectionHeading}`}>
             Add
@@ -843,6 +864,8 @@ export default function Canvas({
             Delete selected{selectedIds.size > 1 ? ` (${selectedIds.size})` : ''}
           </button>
         </section>
+        </>
+        )}
 
         <LayerTree
           nodes={nodes}
@@ -850,7 +873,7 @@ export default function Canvas({
           expandedGroups={expandedGroups}
           onSelect={(id) => selectSingle(id)}
           onToggleExpand={toggleExpand}
-          onRename={renameNode}
+          onRename={readOnly ? undefined : renameNode}
           headingClass={sectionHeading}
         />
 
@@ -864,7 +887,8 @@ export default function Canvas({
               id="node-docs"
               value={String(selected.props.docs ?? '')}
               onChange={(e) => updateDocs(e.target.value)}
-              placeholder="Add documentation for this node…"
+              readOnly={readOnly}
+              placeholder={readOnly ? 'No docs for this node.' : 'Add documentation for this node…'}
               rows={6}
               className="w-full resize-y rounded-md border border-border-strong bg-transparent px-2.5 py-1.5 text-sm text-text placeholder:text-text-subtle hover:border-text-muted"
             />
@@ -872,6 +896,7 @@ export default function Canvas({
         )}
 
         {/* shortcuts hint */}
+        {!readOnly && (
         <section aria-label="Shortcuts" className="space-y-1 text-xs text-text-subtle">
           <p><kbd className={kbd}>Shift</kbd> + click: Multi-select</p>
           <p><kbd className={kbd}>Shift</kbd> + drag: Marquee</p>
@@ -880,6 +905,7 @@ export default function Canvas({
           <p><kbd className={kbd}>Ctrl</kbd> + <kbd className={kbd}>A</kbd>: Select all</p>
           <p><kbd className={kbd}>Del</kbd>: Delete</p>
         </section>
+        )}
       </aside>
     </div>
   );
@@ -908,7 +934,8 @@ function LayerTree({
   expandedGroups: Set<string>;
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
-  onRename: (id: string, name: string) => void;
+  /** omitted for viewers: no F2 / double-click rename */
+  onRename?: (id: string, name: string) => void;
   headingClass: string;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -917,14 +944,18 @@ function LayerTree({
   const treeRef = useRef<HTMLDivElement>(null);
 
   const startRename = (node: CanvasNode) => {
+    if (!onRename) return;
     setEditingId(node.id);
     setEditValue(nodeDisplayName(node));
     setTimeout(() => inputRef.current?.select(), 0);
   };
 
   const commitRename = () => {
-    if (editingId && editValue.trim()) onRename(editingId, editValue.trim());
+    const id = editingId;
+    if (id && editValue.trim()) onRename?.(id, editValue.trim());
     setEditingId(null);
+    // the input unmounts; put focus back on its row instead of <body>
+    if (id) setTimeout(() => treeRef.current?.querySelector<HTMLElement>(`[data-layer-id="${id}"]`)?.focus(), 0);
   };
 
   const rootNodes = nodes.filter((n) => !n.props.parentId);
@@ -993,6 +1024,7 @@ function LayerTree({
       <div key={node.id} role="none">
         <div
           role="treeitem"
+          data-layer-id={node.id}
           aria-level={depth + 1}
           aria-selected={isSelected}
           aria-expanded={isGroup ? isExpanded : undefined}
@@ -1103,6 +1135,7 @@ function NodeView({
   zoom,
   onPointerDown,
   onResizeStart,
+  editable = true,
 }: {
   node: CanvasNode;
   allNodes: CanvasNode[];
@@ -1111,6 +1144,7 @@ function NodeView({
   zoom: number;
   onPointerDown: (e: ReactPointerEvent) => void;
   onResizeStart: (e: ReactPointerEvent, nodeId: string, dir: HandleDir) => void;
+  editable?: boolean;
 }) {
   const style: CSSProperties = {
     left: node.x,
@@ -1165,7 +1199,7 @@ function NodeView({
 
         {hasDocs && <DocsBadge />}
 
-        {selected && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
+        {selected && editable && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
       </div>
     );
   }
@@ -1175,7 +1209,7 @@ function NodeView({
     <div style={style} onPointerDown={onPointerDown} className={`${base} ${variantClass(node.type)}`}>
       <NodeInner node={node} />
       {hasDocs && <DocsBadge />}
-      {selected && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
+      {selected && editable && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
     </div>
   );
 }

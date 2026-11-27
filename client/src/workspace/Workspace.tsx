@@ -225,6 +225,35 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
     if (e.key === 'Escape' && isNarrow()) setSidebarOpen(false);
   };
 
+  // phones: the sidebar is a modal drawer. Move focus into it on open, close it
+  // on Escape from anywhere, and hand focus back to the opener on close.
+  const asideRef = useRef<HTMLElement>(null);
+  const showSidebarRef = useRef<HTMLButtonElement>(null);
+  const drawerWasOpen = useRef(false);
+  useEffect(() => {
+    if (!isNarrow()) return;
+    if (sidebarOpen) {
+      drawerWasOpen.current = true;
+      // after the width transition starts, so the element is focusable
+      const t = setTimeout(() => {
+        if (!asideRef.current?.contains(document.activeElement)) asideRef.current?.querySelector<HTMLElement>('button, input')?.focus();
+      }, 0);
+      const onKey = (e: globalThis.KeyboardEvent) => {
+        if (e.key === 'Escape') setSidebarOpen(false);
+      };
+      document.addEventListener('keydown', onKey);
+      return () => {
+        clearTimeout(t);
+        document.removeEventListener('keydown', onKey);
+      };
+    }
+    if (drawerWasOpen.current) {
+      drawerWasOpen.current = false;
+      setTimeout(() => showSidebarRef.current?.focus(), 0);
+    }
+  }, [sidebarOpen]);
+  const drawerOpen = sidebarOpen && isNarrow();
+
   const deleteButton = (
     <button onClick={() => setConfirmDelete(true)} className={btnDangerGhost}>
       Delete
@@ -248,8 +277,11 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
         className="z-30 shrink-0 overflow-hidden transition-[width] duration-slow ease-in-out max-md:fixed max-md:inset-y-0 max-md:left-0"
       >
         <aside
+          ref={asideRef}
           inert={!sidebarOpen}
           aria-label="Workspaces"
+          aria-modal={drawerOpen || undefined}
+          role={drawerOpen ? 'dialog' : undefined}
           className="flex h-full w-[248px] flex-col border-r border-border bg-surface p-3"
         >
           <div className="mb-4 flex h-8 items-center justify-between">
@@ -376,10 +408,11 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
         </aside>
       </div>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* inert while the phone drawer is open so Tab can't reach the page behind it */}
+      <main inert={drawerOpen} className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-bg px-4 py-2">
           {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)} aria-label="Show sidebar" className={btnIcon}>
+            <button ref={showSidebarRef} onClick={() => setSidebarOpen(true)} aria-label="Show sidebar" className={btnIcon}>
               <SidebarSimple size={16} aria-hidden="true" />
             </button>
           )}
@@ -502,6 +535,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
                 selectedNodeId={selectedNodeId}
                 onNodeSelect={setSelectedNodeId}
                 exportTick={exportTick}
+                readOnly={readOnly}
               />
             </div>
           )}
