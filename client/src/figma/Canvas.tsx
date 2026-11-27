@@ -23,6 +23,8 @@ import {
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
 import type { CanvasNode, NodeType } from './types';
+import { absoluteBox, nodeDisplayName } from './labels';
+import { collectMentions, type Mention } from './mentions';
 import { btnSecondary, btnDangerGhost } from '../workspace/ui';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -127,6 +129,10 @@ export default function Canvas({
   onNodeSelect,
   exportTick = 0,
   readOnly = false,
+  active = true,
+  jump = null,
+  docName,
+  onMentionClick,
 }: {
   boardId: string;
   selectedNodeId?: string | null;
@@ -135,6 +141,13 @@ export default function Canvas({
   exportTick?: number;
   /** viewers: look, select and zoom, but nothing that writes to the board */
   readOnly?: boolean;
+  /** false while another surface is showing; the canvas stays mounted but ignores keys */
+  active?: boolean;
+  /** "show this element": select it and pan so it's centered. n changes per request */
+  jump?: { id: string; n: number } | null;
+  /** the workspace's Doc; read-only here, to list where it links to each element */
+  docName?: string;
+  onMentionClick?: (nodeId: string, index: number) => void;
 }) {
   const [{ ydoc, ynodes }] = useState(() => {
     const ydoc = new Y.Doc();
@@ -194,6 +207,62 @@ export default function Canvas({
     }
   }, [selectedNodeId]);
 
+  // "Show on canvas" from the Doc: select the element and center it in the view.
+  // Runs once per request, and only once the canvas is visible so it can be measured.
+  const handledJump = useRef(0);
+  useEffect(() => {
+    if (!active || !jump || jump.n === handledJump.current) return;
+    // marked handled only once the pan happens: a re-run cancels the pending frame,
+    // and must not then skip the jump as already done
+    const frame = requestAnimationFrame(() => {
+      const node = ynodes.get(jump.id);
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!node) {
+        handledJump.current = jump.n;
+        return;
+      }
+      if (!rect || !rect.width) return;
+      handledJump.current = jump.n;
+      selectSingle(jump.id);
+      const box = absoluteBox(node, (id) => ynodes.get(id));
+      setView((prev) => {
+        // keep the current zoom unless the element wouldn't fit
+        const fit = Math.min((rect.width * 0.8) / box.width, (rect.height * 0.8) / box.height);
+        const scale = clamp(Math.min(prev.scale, fit), 0.2, 4);
+        return {
+          scale,
+          tx: rect.width / 2 - (box.x + box.width / 2) * scale,
+          ty: rect.height / 2 - (box.y + box.height / 2) * scale,
+        };
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [jump, active, ynodes, selectSingle]);
+
+  // backlinks: where the Doc links to each element
+  const [mentions, setMentions] = useState<Map<string, Mention[]>>(new Map());
+  useEffect(() => {
+    if (!docName) return;
+    const ddoc = new Y.Doc();
+    const fragment = ddoc.getXmlFragment('default'); // TipTap's Collaboration field
+    const provider = connectDoc(docName, ddoc);
+    const labelFor = (id: string, stored: string) => {
+      const n = ynodes.get(id);
+      return n ? nodeDisplayName(n) : stored;
+    };
+    const recompute = () => setMentions(collectMentions(fragment, labelFor));
+    fragment.observeDeep(recompute);
+    ynodes.observe(recompute); // snippets show live element names
+    provider.on('synced', recompute);
+    return () => {
+      fragment.unobserveDeep(recompute);
+      ynodes.unobserve(recompute);
+      provider.off('synced', recompute);
+      provider.destroy();
+      ddoc.destroy();
+    };
+  }, [docName, ynodes]);
+
   // export finished: trace every node outline once (skipped under reduced motion)
   useEffect(() => {
     if (exportTick === lastTick.current) return;
@@ -231,6 +300,9 @@ export default function Canvas({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!active) return;
+      const target = e.target as HTMLElement;
+      if (target.isContentEditable) return;
       const mod = e.metaKey || e.ctrlKey;
       // Ctrl+G → group
       if (mod && e.key === 'g' && !e.shiftKey) {
@@ -271,7 +343,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [nodes, selectedIds, readOnly]);
+  }, [nodes, selectedIds, readOnly, active]);
 
   // ── Coordinate conversion ──────────────────────────────────────────
 
@@ -895,6 +967,31 @@ export default function Canvas({
           </section>
         )}
 
+        {/* backlinks: Doc lines that link to the selected element */}
+        {selected && docName && (
+          <section aria-labelledby="node-mentions">
+            <h3 id="node-mentions" className={`mb-2 ${sectionHeading}`}>
+              Mentioned in Doc{mentions.get(selected.id)?.length ? ` (${mentions.get(selected.id)!.length})` : ''}
+            </h3>
+            {mentions.get(selected.id)?.length ? (
+              <ul className="space-y-1">
+                {mentions.get(selected.id)!.map((m) => (
+                  <li key={m.index}>
+                    <button
+                      onClick={() => onMentionClick?.(selected.id, m.index)}
+                      className="w-full rounded-md px-2 py-1.5 text-left text-xs text-text-muted hover:bg-surface-hover hover:text-text"
+                    >
+                      <span className="line-clamp-2">{m.snippet || 'Canvas link'}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-text-subtle">Not linked from the Doc yet.</p>
+            )}
+          </section>
+        )}
+
         {/* shortcuts hint */}
         {!readOnly && (
         <section aria-label="Shortcuts" className="space-y-1 text-xs text-text-subtle">
@@ -913,12 +1010,6 @@ export default function Canvas({
 
 // ── LayerTree ────────────────────────────────────────────────────────
 
-function nodeDisplayName(node: CanvasNode): string {
-  if (node.type === 'text' || node.type === 'badge') return String(node.props.text ?? node.type);
-  if (node.type === 'input') return String(node.props.placeholder ?? 'Input');
-  if (node.type === 'group') return `Group (${(node.props.childIds as string[])?.length ?? 0})`;
-  return String(node.props.label ?? node.type);
-}
 
 function LayerTree({
   nodes,
