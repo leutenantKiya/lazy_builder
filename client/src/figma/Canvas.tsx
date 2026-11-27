@@ -257,6 +257,15 @@ export default function Canvas({
   // first view: fit the page width into the canvas (never zoom in past 100%). Waits for the board to
   // sync so a mobile-sized page isn't fitted as 1440, and for the canvas to be measurable.
   const fitted = useRef(false);
+  // the whole page width in view, never zoomed in past 100%
+  const fitPageView = (rect: DOMRect): View => {
+    const scale = clamp((rect.width - 64) / page.width, 0.2, 1);
+    return { scale, tx: Math.max(32, (rect.width - page.width * scale) / 2), ty: 40 };
+  };
+  const fitPage = () => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect?.width) setView(fitPageView(rect));
+  };
   useEffect(() => {
     if (!active || !synced || fitted.current) return;
     const frame = requestAnimationFrame(() => {
@@ -266,8 +275,7 @@ export default function Canvas({
       setView((prev) => {
         // someone already moved the view (e.g. "show on canvas"): leave it
         if (prev.scale !== 1 || prev.tx !== 0 || prev.ty !== 0) return prev;
-        const scale = clamp((rect.width - 64) / page.width, 0.2, 1);
-        return { scale, tx: Math.max(32, (rect.width - page.width * scale) / 2), ty: 40 };
+        return fitPageView(rect);
       });
     });
     return () => cancelAnimationFrame(frame);
@@ -920,11 +928,12 @@ export default function Canvas({
             <Plus size={14} aria-hidden="true" />
           </button>
           <button
-            onClick={() => setView({ scale: 1, tx: 0, ty: 0 })}
-            aria-label="Reset zoom to 100%"
+            onClick={fitPage}
+            aria-label="Fit the page in view"
+            title="Fit the page in view"
             className="h-6 rounded-md px-2 text-xs font-medium hover:bg-white/15 focus-visible:outline-offset-0"
           >
-            Reset
+            Fit
           </button>
         </div>
       </div>
