@@ -78,8 +78,8 @@ type PropDef = { id: string; name: string; nodeId: string; field: 'text' | 'labe
 
 ### Page frame (the boundary people asked for)
 
-- Each page is drawn as a frame on the canvas at its chosen width: presets Desktop 1440, Tablet 768, Mobile 390, or custom. Outside the frame the canvas is dimmed, so "inside the page" reads at a glance.
-- A dashed fold line marks the first screen (default 900px desktop, 800px tablet, 700px mobile), labelled "First screen".
+- Each page is drawn as a frame on the canvas at its chosen width: presets Desktop 16:9 (1440 × 810, the default), Tablet 768, Mobile 390, or custom. Outside the frame the canvas is dimmed, so "inside the page" reads at a glance.
+- A dashed fold line marks the first screen (desktop 810 so the first screen is 16:9; tablet 1024; mobile 844), labelled "First screen". The frame is never shorter than the fold and grows downward to fit content, so placing things below the fold is normal scrolling content, not "outside".
 - **Off-page warning:** an element that ends up fully or partly outside the frame gets a warning outline while dragging and afterwards, and a "Not on the page" marker in the layer list. Export skips fully-outside elements and lists them in the export toast ("2 elements outside the page were left out"); partly-outside elements are clipped by the frame.
 - **Snapping to the page:** the existing snap guides also catch the frame's left/right edges, centre line, and a 24px margin on each side.
 - **Export uses the frame:** the page frame is the root and its width is the layout width. Nothing is measured from stray elements any more.
@@ -89,7 +89,7 @@ type PropDef = { id: string; name: string; nodeId: string; field: 'text' | 'labe
 
 - A Pages list in the canvas panel: add, rename, edit the path (validated: starts with `/`, unique, lowercase, no spaces), reorder, duplicate, delete (with a confirm listing incoming links).
 - Design mode shows one page at a time; switching pages keeps each page's zoom and scroll. The layer list shows the current page only.
-- Export (React first): one file per page in `src/pages/`, a router (TanStack Router), and `<Link to>` for links. Other printers emit their native routing as they ship (Next.js `app/<path>/page.tsx`, SvelteKit `routes/<path>/+page.svelte`, Astro `src/pages/<path>.astro`, plain HTML one file per page).
+- Export (React first): one file per page in `src/pages/`, React Router, and `<Link to>` for links. Other printers emit their native routing as they ship (Next.js `app/<path>/page.tsx`, SvelteKit `routes/<path>/+page.svelte`, Astro `src/pages/<path>.astro`, plain HTML one file per page).
 - The Doc stays one document per workspace. Canvas links can point at elements on any page; following one switches to that page and centres the element.
 
 ### Flow mode: drag to wire, drag to release
@@ -155,7 +155,7 @@ IR → lower() → ViewTree → printer(target) → FileMap → zip
 | T-023 | Page frame on the existing single page: frame drawn at a chosen width, dimmed outside, fold line, page-edge snapping, off-page warnings in canvas and layer list | M | T-007, design spec |
 | T-024 | Export from the frame: frame is the root and sets the width; fully-outside elements skipped and reported in the export toast | S | T-006, T-023 |
 | T-025 | `pages` map, v1 → one "Home" page at `/` on first open, Pages list (add, rename, path, reorder, duplicate, delete with incoming-link warning), per-page view state | M | T-023 |
-| T-026 | Multipage React export: `src/pages/*`, TanStack Router, `<Link to>`; golden test + CI build of a 3-page fixture | M | T-024, T-025, T-008 |
+| T-026 | Multipage React export: `src/pages/*`, React Router, `<Link to>`; golden test + CI build of a 3-page fixture | M | T-024, T-025, T-008 |
 | T-027 | Flow mode: frames side by side and draggable, drag-to-wire from element handle, drag the wire end off to release or onto another frame to re-route, wire styling and hover highlights, "Link to" picker as the non-drag path | L | T-025 |
 | T-028 | Preview mode: render a page from the IR with working links between pages | M | T-027 |
 | **Phase 3: responsive** | | | |
@@ -204,6 +204,6 @@ Phase 2 comes first after the foundation because the page frame changes what "th
 2. Breakpoints at 1024 and 768, or different values?
 3. Components per workspace (planned), or a personal library shared across your workspaces?
 4. Which export target matters most after React? The plan does Next.js first because it's smallest.
-5. Default frame width for new pages: Desktop 1440 (planned), or start on Mobile 390?
-6. Should export skip elements outside the page (planned, with a note in the toast), or include them and warn?
-7. Router for multipage React exports: TanStack Router (planned, matches the app's own stack) or React Router?
+5. ~~Default frame for new pages~~ **Decided (2026-11-27): 16:9.** New pages start at 1440 × 810: width 1440, first-screen (fold) line at 810, so the first screen is exactly 16:9. The page still grows downward with its content, like a scrolling web page.
+6. ~~Skip or include elements outside the page~~ **Decided: skip ("escape") them.** Export leaves out elements outside the frame and reports how many in the export toast.
+7. ~~Router for multipage React exports~~ **Decided: React Router.**
