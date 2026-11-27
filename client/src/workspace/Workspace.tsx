@@ -119,10 +119,20 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
     updateWs.mutate({ id: active.id, hasCanvas: true }, { onSuccess: () => setSurface('figma') });
   };
 
+  // Doc → Canvas: select the element and pan to it
+  const [canvasJump, setCanvasJump] = useState<{ id: string; n: number } | null>(null);
   const handleFigmaRefClick = (nodeId: string) => {
     if (!active?.hasCanvas) return;
     setSelectedNodeId(nodeId);
+    setCanvasJump({ id: nodeId, n: Date.now() });
     setSurface('figma');
+  };
+
+  // Canvas → Doc: jump to the nth link to this element
+  const [docJump, setDocJump] = useState<{ id: string; index: number; n: number } | null>(null);
+  const handleMentionClick = (nodeId: string, index: number) => {
+    setDocJump({ id: nodeId, index, n: Date.now() });
+    setSurface('notion');
   };
 
   const startRenameWs = (ws: WorkspaceSummary) => {
@@ -510,34 +520,44 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
               creating={createWs.isPending}
               onJoin={focusJoin}
             />
-          ) : surface === 'notion' ? (
-            <div
-              role="tabpanel"
-              id="panel-notion"
-              aria-labelledby="tab-notion"
-              className="doc-page h-full overflow-auto px-4 py-8 sm:px-8 sm:py-12"
-            >
-              <div className="mx-auto max-w-[70ch]">
-                <Editor
-                  key={`${active.id}:notion`}
-                  docId={`${active.id}:notion`}
-                  figmaBoardId={active.hasCanvas ? `${active.id}:figma` : undefined}
-                  onFigmaRefClick={handleFigmaRefClick}
-                  readOnly={readOnly}
-                />
-              </div>
-            </div>
           ) : (
-            <div role="tabpanel" id="panel-figma" aria-labelledby="tab-figma" className="h-full">
-              <Canvas
-                key={`${active.id}:figma`}
-                boardId={`${active.id}:figma`}
-                selectedNodeId={selectedNodeId}
-                onNodeSelect={setSelectedNodeId}
-                exportTick={exportTick}
-                readOnly={readOnly}
-              />
-            </div>
+            // both surfaces stay mounted so the canvas keeps its view and connection
+            <>
+              <div
+                role="tabpanel"
+                id="panel-notion"
+                aria-labelledby="tab-notion"
+                hidden={surface !== 'notion'}
+                className="doc-page h-full overflow-auto px-4 py-8 sm:px-8 sm:py-12"
+              >
+                <div className="mx-auto max-w-[70ch]">
+                  <Editor
+                    key={`${active.id}:notion`}
+                    docId={`${active.id}:notion`}
+                    figmaBoardId={active.hasCanvas ? `${active.id}:figma` : undefined}
+                    onFigmaRefClick={handleFigmaRefClick}
+                    jumpTo={docJump}
+                    readOnly={readOnly}
+                  />
+                </div>
+              </div>
+              {active.hasCanvas && (
+                <div role="tabpanel" id="panel-figma" aria-labelledby="tab-figma" hidden={surface !== 'figma'} className="h-full">
+                  <Canvas
+                    key={`${active.id}:figma`}
+                    boardId={`${active.id}:figma`}
+                    docName={`${active.id}:notion`}
+                    selectedNodeId={selectedNodeId}
+                    onNodeSelect={setSelectedNodeId}
+                    onMentionClick={handleMentionClick}
+                    exportTick={exportTick}
+                    readOnly={readOnly}
+                    active={surface === 'figma'}
+                    jump={canvasJump}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
