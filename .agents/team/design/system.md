@@ -1,5 +1,7 @@
 # Lazy Builder design system: "Lit workbench"
 
+> **Logo (2026-11-27):** the owner's mark: a tall rounded ink block and an orange block at its foot, set slightly lower, snapping into an "L". Source: `client/src/components/Monogram.tsx` (viewBox `0 -10 70 70`; ink block 26×48 r6 at 0,0; orange block 40×20 r5 at 30,30) and `client/public/favicon.svg`. The ink block uses the text colour (`#171615` light, `#ededed` dark); the orange is the brand `#ff5a1f` in both themes. Sizes: 16px in the sidebar, 20px on the login card. This replaces the "L" monogram placeholder in §6.3.
+
 > **Palette v2 (2026-11-27): "Workshop" replaces the violet palette.** The owner rejected the
 > violet-on-violet-black scheme as the generic AI default (antislop: "purple-and-black schemes").
 > Source of truth for every colour value is now `tokens.css` (and `client/src/index.css`); hex values
