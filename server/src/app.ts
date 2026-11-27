@@ -13,7 +13,7 @@ const app = new Hono();
 
 app.use(logger());
 app.use(secureHeaders());
-app.use("/api/*", cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
+app.use("/api/*", cors({ origin: env.CLIENT_ORIGIN, credentials: true, exposeHeaders: ["x-lazy-skipped"] }));
 
 app.get("/health", (c) => c.json({ ok: true }));
 app.route("/api/auth", authRoutes);

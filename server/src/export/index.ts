@@ -1,9 +1,9 @@
 import { strToU8, zipSync } from "fflate";
-import type { ExportInput, FileMap } from "./ir.ts";
+import type { ExportInput, ExportResult, FileMap } from "./ir.ts";
 import { generateReactVite, slugify } from "./react-vite/generate.ts";
 import type { ExportTargetId } from "./targets.ts";
 
-const GENERATORS: Partial<Record<ExportTargetId, (input: ExportInput) => FileMap>> = {
+const GENERATORS: Partial<Record<ExportTargetId, (input: ExportInput) => ExportResult>> = {
   "react-vite": generateReactVite,
 };
 

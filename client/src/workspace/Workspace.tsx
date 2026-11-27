@@ -194,7 +194,7 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   const runExport = () => {
     if (!active || !exportEnabled || exportWs.isPending) return;
     exportWs.mutate(active.id, {
-      onSuccess: ({ blob, filename }) => {
+      onSuccess: ({ blob, filename, skipped }) => {
         // blob -> object URL -> click, so we know the file arrived
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -209,7 +209,9 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
         pushToast({
           kind: 'success',
           title: `${filename} downloaded`,
-          body: `${target?.label ?? 'Project'} project. Unzip, then `,
+          body: `${target?.label ?? 'Project'} project. ${
+            skipped > 0 ? `${skipped} element${skipped === 1 ? '' : 's'} outside the page ${skipped === 1 ? 'was' : 'were'} left out. ` : ''
+          }Unzip, then `,
           code: 'npm install && npm run dev',
         });
       },

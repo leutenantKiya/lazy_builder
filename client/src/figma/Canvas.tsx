@@ -20,11 +20,22 @@ import {
   CaretDown,
   Plus,
   Trash,
+  Warning,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
-import type { CanvasNode, NodeType } from './types';
+import { DEFAULT_PAGE, HOME_PAGE_ID, type CanvasNode, type NodeType, type Page } from './types';
 import { absoluteBox, nodeDisplayName } from './labels';
 import { collectMentions, type Mention } from './mentions';
+import {
+  PageFrame,
+  PAGE_PRESETS,
+  WidthInput,
+  OFF_PAGE_TIP,
+  frameHeight,
+  offPageMap,
+  pageSnapTargets,
+  type OffPage,
+} from './PageFrame';
 import { btnSecondary, btnDangerGhost } from '../workspace/ui';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -149,11 +160,15 @@ export default function Canvas({
   docName?: string;
   onMentionClick?: (nodeId: string, index: number) => void;
 }) {
-  const [{ ydoc, ynodes }] = useState(() => {
+  const [{ ydoc, ynodes, ypages }] = useState(() => {
     const ydoc = new Y.Doc();
     const ynodes = ydoc.getMap<CanvasNode>('nodes');
-    return { ydoc, ynodes };
+    // pages live in the same doc; only the fixed id "home" exists for now
+    const ypages = ydoc.getMap<Page>('pages');
+    return { ydoc, ynodes, ypages };
   });
+  const [page, setPageState] = useState<Page>(DEFAULT_PAGE);
+  const [synced, setSynced] = useState(false);
 
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -239,6 +254,25 @@ export default function Canvas({
     return () => cancelAnimationFrame(frame);
   }, [jump, active, ynodes, selectSingle]);
 
+  // first view: fit the page width into the canvas (never zoom in past 100%). Waits for the board to
+  // sync so a mobile-sized page isn't fitted as 1440, and for the canvas to be measurable.
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (!active || !synced || fitted.current) return;
+    const frame = requestAnimationFrame(() => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect || !rect.width) return;
+      fitted.current = true;
+      setView((prev) => {
+        // someone already moved the view (e.g. "show on canvas"): leave it
+        if (prev.scale !== 1 || prev.tx !== 0 || prev.ty !== 0) return prev;
+        const scale = clamp((rect.width - 64) / page.width, 0.2, 1);
+        return { scale, tx: Math.max(32, (rect.width - page.width * scale) / 2), ty: 40 };
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, synced, page.width]);
+
   // backlinks: where the Doc links to each element
   const [mentions, setMentions] = useState<Map<string, Mention[]>>(new Map());
   useEffect(() => {
@@ -280,21 +314,31 @@ export default function Canvas({
     const sync = () => setNodes(Array.from(ynodes.values()));
     ynodes.observe(sync);
     sync();
+    const syncPage = () => setPageState(ypages.get(HOME_PAGE_ID) ?? DEFAULT_PAGE);
+    ypages.observe(syncPage);
+    syncPage();
 
-    // seed a brand-new board; read-only connections can't write, so skip them
+    // seed a brand-new board / a board without a page yet; read-only connections can't write, so skip them.
+    // The fixed id "home" makes concurrent first opens merge into one record.
     const onSync = ({ state }: { state: boolean }) => {
-      if (state && ynodes.size === 0 && provider.authorizedScope === 'read-write') {
-        ydoc.transact(() => INITIAL_NODES.forEach((n) => ynodes.set(n.id, n)));
+      if (!state) return;
+      if (provider.authorizedScope === 'read-write') {
+        ydoc.transact(() => {
+          if (ynodes.size === 0) INITIAL_NODES.forEach((n) => ynodes.set(n.id, n));
+          if (!ypages.has(HOME_PAGE_ID)) ypages.set(HOME_PAGE_ID, DEFAULT_PAGE);
+        });
       }
+      setSynced(true);
     };
     provider.on('synced', onSync);
 
     return () => {
       provider.off('synced', onSync);
       ynodes.unobserve(sync);
+      ypages.unobserve(syncPage);
       provider.destroy();
     };
-  }, [boardId, ydoc, ynodes]);
+  }, [boardId, ydoc, ynodes, ypages]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────
 
@@ -656,8 +700,9 @@ export default function Canvas({
       );
       const mx = [rawX, rawX + moving.width / 2, rawX + moving.width];
       const my = [rawY, rawY + moving.height / 2, rawY + moving.height];
-      const ox = others.flatMap((o) => [o.x, o.x + o.width / 2, o.x + o.width]);
-      const oy = others.flatMap((o) => [o.y, o.y + o.height / 2, o.y + o.height]);
+      const snapPage = pageSnapTargets(page);
+      const ox = [...others.flatMap((o) => [o.x, o.x + o.width / 2, o.x + o.width]), ...snapPage.x];
+      const oy = [...others.flatMap((o) => [o.y, o.y + o.height / 2, o.y + o.height]), ...snapPage.y];
 
       const sx = snapAxis(mx, ox);
       const sy = snapAxis(my, oy);
@@ -728,6 +773,17 @@ export default function Canvas({
   // only root nodes — children live inside their group
   const rootNodes = nodes.filter((n) => !n.props.parentId);
 
+  const offPageById = offPageMap(nodes, page.width);
+  const pageHeight = frameHeight(
+    rootNodes.map((n) => absoluteBox(n, (id) => nodes.find((p) => p.id === id))),
+    page,
+  );
+
+  const setPage = (patch: Partial<Pick<Page, 'width' | 'foldHeight'>>) => {
+    if (readOnly) return;
+    ypages.set(HOME_PAGE_ID, { ...(ypages.get(HOME_PAGE_ID) ?? DEFAULT_PAGE), ...patch });
+  };
+
   const worldStyle: CSSProperties = {
     transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
     transformOrigin: '0 0',
@@ -765,6 +821,7 @@ export default function Canvas({
         className="relative h-full flex-1 cursor-grab touch-none overflow-hidden bg-canvas active:cursor-grabbing"
       >
         <div className="absolute left-0 top-0" style={worldStyle}>
+          <PageFrame page={page} height={pageHeight} zoom={view.scale} />
           {rootNodes.map((node) => (
             <NodeView
               key={node.id}
@@ -776,6 +833,7 @@ export default function Canvas({
               onPointerDown={(e) => startDrag(e, node)}
               onResizeStart={startResize}
               editable={!readOnly}
+              offPage={offPageById.get(node.id) ?? null}
             />
           ))}
 
@@ -876,6 +934,45 @@ export default function Canvas({
         aria-label="Canvas tools"
         className="flex w-[232px] shrink-0 flex-col gap-5 overflow-auto border-l border-border bg-surface p-3"
       >
+        <section aria-labelledby="canvas-page">
+          <h3 id="canvas-page" className={`mb-2 ${sectionHeading}`}>
+            Page
+          </h3>
+          {readOnly ? (
+            <p className="text-xs text-text-muted tabular-nums">
+              {page.name} · {page.width} wide, first screen {page.foldHeight}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div role="group" aria-label="Page size presets" className="flex flex-col gap-1">
+                {PAGE_PRESETS.map((p) => {
+                  const on = page.width === p.width && page.foldHeight === p.foldHeight;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setPage({ width: p.width, foldHeight: p.foldHeight })}
+                      className={`flex h-8 items-center justify-between rounded-md px-2 text-left text-xs transition-[background-color] duration-fast ease-out ${
+                        on ? 'bg-accent-subtle font-medium text-accent-subtle-text' : 'bg-surface-hover text-text hover:bg-surface-active'
+                      }`}
+                    >
+                      {p.label}
+                      <span className={`tabular-nums ${on ? '' : 'text-text-subtle'}`}>{p.width}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="page-width" className="text-xs text-text-muted">
+                  Custom width
+                </label>
+                <WidthInput id="page-width" width={page.width} onCommit={(w) => setPage({ width: w })} />
+              </div>
+            </div>
+          )}
+        </section>
+
         {readOnly ? (
           <p className="rounded-md bg-surface-hover px-2.5 py-2 text-xs text-text-muted">
             View only. You can select, zoom and read docs, but not change the canvas.
@@ -946,6 +1043,7 @@ export default function Canvas({
           onSelect={(id) => selectSingle(id)}
           onToggleExpand={toggleExpand}
           onRename={readOnly ? undefined : renameNode}
+          offPageById={offPageById}
           headingClass={sectionHeading}
         />
 
@@ -1018,6 +1116,7 @@ function LayerTree({
   onSelect,
   onToggleExpand,
   onRename,
+  offPageById,
   headingClass,
 }: {
   nodes: CanvasNode[];
@@ -1027,6 +1126,7 @@ function LayerTree({
   onToggleExpand: (id: string) => void;
   /** omitted for viewers: no F2 / double-click rename */
   onRename?: (id: string, name: string) => void;
+  offPageById: Map<string, OffPage>;
   headingClass: string;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1163,6 +1263,17 @@ function LayerTree({
             </span>
           )}
 
+          {offPageById.has(node.id) && (
+            <span
+              role="img"
+              aria-label={OFF_PAGE_TIP[offPageById.get(node.id)!]}
+              title={OFF_PAGE_TIP[offPageById.get(node.id)!]}
+              className="shrink-0 text-warning"
+            >
+              <Warning size={14} weight="fill" aria-hidden="true" />
+            </span>
+          )}
+
           {Boolean(node.props.docs) && (
             <span role="img" aria-label="Has docs" className="shrink-0 text-text-subtle">
               <Note size={12} aria-hidden="true" />
@@ -1227,6 +1338,7 @@ function NodeView({
   onPointerDown,
   onResizeStart,
   editable = true,
+  offPage = null,
 }: {
   node: CanvasNode;
   allNodes: CanvasNode[];
@@ -1236,6 +1348,8 @@ function NodeView({
   onPointerDown: (e: ReactPointerEvent) => void;
   onResizeStart: (e: ReactPointerEvent, nodeId: string, dir: HandleDir) => void;
   editable?: boolean;
+  /** set when the element is (partly) outside the page frame: gets a dashed warning outline */
+  offPage?: OffPage | null;
 }) {
   const style: CSSProperties = {
     left: node.x,
@@ -1246,7 +1360,10 @@ function NodeView({
 
   const ring = selected
     ? ` transition-shadow duration-fast ${multi ? RING.multi : RING.selected}`
-    : ` ${RING.hover}`;
+    : offPage
+      ? ''
+      : ` ${RING.hover}`;
+  const warn = offPage ? ' outline outline-2 outline-dashed outline-offset-2 outline-warning' : '';
   const base = `absolute flex items-center justify-center select-none cursor-move${ring}`;
 
   const hasDocs = Boolean(node.props.docs);
@@ -1260,7 +1377,7 @@ function NodeView({
       <div
         style={style}
         onPointerDown={onPointerDown}
-        className={`absolute cursor-move rounded-md${ring}`}
+        className={`absolute cursor-move rounded-md${ring}${warn}`}
       >
         {/* group outline (the selection ring replaces it while selected) */}
         <div
@@ -1297,7 +1414,7 @@ function NodeView({
 
   // ── Regular node ───────────────────────────────────────────────────
   return (
-    <div style={style} onPointerDown={onPointerDown} className={`${base} ${variantClass(node.type)}`}>
+    <div style={style} onPointerDown={onPointerDown} className={`${base}${warn} ${variantClass(node.type)}`}>
       <NodeInner node={node} />
       {hasDocs && <DocsBadge />}
       {selected && editable && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}

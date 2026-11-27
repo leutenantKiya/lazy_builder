@@ -1,5 +1,5 @@
 # T-023 + T-024 Page frame, and export from the frame
-Owner: builder | Status: building | Branch: feat/page-frame
+Owner: builder | Status: review | Branch: feat/page-frame
 
 ## Goal
 People can see where the page is. Today the canvas is an infinite plane and the export sizes the page from the bounding box of whatever is on it, so nobody can tell whether an element is "on the screen". Draw a page frame, warn about elements outside it, snap to it, and make the export use the frame and leave out what's outside.
@@ -50,3 +50,9 @@ Pages list, routing, multiple pages, Flow mode, Preview, auto-layout, breakpoint
 - Work on the current branch `feat/page-frame` (already created; do not create or switch branches). One commit for the task.
 - Use semantic tokens only (`.agents/team/design/system.md` §0 and the palette note at its top; tokens in `client/src/index.css`). Warnings use the warning token, not the accent.
 - Every new control needs a visible focus ring and an accessible name.
+
+## Notes
+- Frame, fold line, labels in `client/src/figma/PageFrame.tsx`; `home` page record seeded on first read-write sync (viewers never write). Off-page rule is mirrored in `PageFrame.offPage` (client) and `fullyOutside` in generate.ts (server).
+- Group children take their group's warning state. Export only skips fully-outside top-level nodes.
+- Export: `generateReactVite` returns `{ files, skipped }`; root `<main>` is `overflow-hidden`, `minHeight` = max(fold, lowest bottom + 80). Body padding removed from the exported index.css (frame origin is the page).
+- Initial fit waits for first sync and for the canvas to be visible (it stays mounted behind the Doc tab).
