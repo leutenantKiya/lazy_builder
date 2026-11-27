@@ -86,7 +86,7 @@ export default function Button({ label, ...rest }: { label: string } & ButtonHTM
   return (
     <button
       type="button"
-      className="h-full w-full rounded-md bg-violet-600 text-sm font-medium text-white shadow hover:bg-violet-700"
+      className="h-full w-full rounded-md bg-neutral-900 text-sm font-medium text-white shadow hover:bg-neutral-800"
       {...rest}
     >
       {label}
@@ -99,7 +99,7 @@ export default function Button({ label, ...rest }: { label: string } & ButtonHTM
 export default function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className="h-full w-full rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-800 outline-none placeholder:text-neutral-400 focus:border-violet-500"
+      className="h-full w-full rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-800 outline-none placeholder:text-neutral-400 focus:border-neutral-900"
       {...props}
     />
   );
@@ -124,7 +124,7 @@ export default function ImagePlaceholder({ alt }: { alt: string }) {
 `,
   badge: `export default function Badge({ children }: { children: string }) {
   return (
-    <span className="flex h-full w-full items-center justify-center rounded-full bg-violet-100 px-2 text-xs font-medium text-violet-700">
+    <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-200 px-2 text-xs font-medium text-neutral-700">
       {children}
     </span>
   );
@@ -141,7 +141,7 @@ export default function Toggle({ defaultOn = false, label = 'Toggle' }: { defaul
       aria-checked={on}
       aria-label={label}
       onClick={() => setOn((v) => !v)}
-      className={\`flex h-full w-full items-center rounded-full px-0.5 transition-colors \${on ? 'justify-end bg-violet-500' : 'justify-start bg-neutral-300'}\`}
+      className={\`flex h-full w-full items-center rounded-full px-0.5 transition-colors \${on ? 'justify-end bg-neutral-900' : 'justify-start bg-neutral-300'}\`}
     >
       <span className="h-[18px] w-[18px] rounded-full bg-white shadow-sm" />
     </button>

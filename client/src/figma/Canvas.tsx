@@ -1221,6 +1221,8 @@ function ResizeHandles({
 
 // ── NodeInner: pure visual rendering ─────────────────────────────────
 
+// previews show the user's design, so they stay neutral like the export;
+// the accent is reserved for app chrome (selection, primary action, links)
 function NodeInner({ node }: { node: CanvasNode }) {
   switch (node.type) {
     case 'frame':
@@ -1239,7 +1241,7 @@ function NodeInner({ node }: { node: CanvasNode }) {
 
     case 'button':
       return (
-        <div className="flex h-full w-full items-center justify-center rounded-md bg-accent text-sm font-medium text-accent-fg">
+        <div className="flex h-full w-full items-center justify-center rounded-md bg-text text-sm font-medium text-bg">
           {String(node.props.label ?? 'Button')}
         </div>
       );
@@ -1271,7 +1273,7 @@ function NodeInner({ node }: { node: CanvasNode }) {
 
     case 'badge':
       return (
-        <div className="flex h-full w-full items-center justify-center rounded-full bg-accent-subtle px-2 text-xs font-medium text-accent-subtle-text">
+        <div className="flex h-full w-full items-center justify-center rounded-full bg-surface-active px-2 text-xs font-medium text-text-muted">
           {String(node.props.text ?? 'Badge')}
         </div>
       );
@@ -1281,7 +1283,7 @@ function NodeInner({ node }: { node: CanvasNode }) {
       return (
         <div
           className={`flex h-full w-full items-center rounded-full px-0.5 transition-colors ${
-            on ? 'bg-accent justify-end' : 'bg-border-strong justify-start'
+            on ? 'bg-text justify-end' : 'bg-border-strong justify-start'
           }`}
         >
           <div className="h-[18px] w-[18px] rounded-full bg-white shadow-sm" />

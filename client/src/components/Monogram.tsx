@@ -1,4 +1,4 @@
-// placeholder product mark: 16px violet square with an L (system.md 6.3)
+// placeholder product mark: 16px accent square with an L (system.md 6.3)
 export default function Monogram() {
   return (
     <span

@@ -1,5 +1,16 @@
 # Lazy Builder design system: "Lit workbench"
 
+> **Palette v2 (2026-11-27): "Workshop" replaces the violet palette.** The owner rejected the
+> violet-on-violet-black scheme as the generic AI default (antislop: "purple-and-black schemes").
+> Source of truth for every colour value is now `tokens.css` (and `client/src/index.css`); hex values
+> and ratios in §1 and §2 below describe v1 and are superseded. Token names and the colour budget in §0
+> are unchanged: the accent (safety orange: `#ff5a1f` dark, `#c2410c` light) marks only the primary
+> action, canvas selection, links and focus. Errors use a pink-leaning crimson and warnings use yellow
+> so neither reads as accent. Canvas node previews and exported code use neutral ink, never the accent,
+> so the selection ring is the only orange on the canvas. All text pairs measure >= 4.5:1 and all UI
+> boundaries >= 3:1 in both themes.
+
+
 Source of truth for how Lazy Builder looks. Token names here match `tokens.css` one to one.
 Research and reasoning: `research.md`. Version 1, 2026-11-26.
 

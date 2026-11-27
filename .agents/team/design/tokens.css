@@ -19,105 +19,108 @@
  */
 
 /* ── Light values (also the fallback before the theme class is set) ── */
+/* Palette A "Workshop": neutral graphite on warm paper, safety-orange accent.
+ * Orange marks what's live (primary action, selection, links, focus); errors
+ * use a pink-leaning crimson and warnings use yellow so neither reads as accent. */
 :root {
-  --lb-bg: #f7f7fa;
+  --lb-bg: #f5f4f1;
   --lb-surface: #ffffff;
   --lb-surface-raised: #ffffff;
-  --lb-surface-hover: #f0f0f5;
-  --lb-surface-active: #ececf2;
-  --lb-canvas: #efeff4;
+  --lb-surface-hover: #efeeea;
+  --lb-surface-active: #e8e6e1;
+  --lb-canvas: #eceae6;
 
-  --lb-border: #e2e2ea;          /* decorative separators only */
-  --lb-border-strong: #7a7a90;   /* control boundaries: inputs, secondary buttons (>= 3:1) */
+  --lb-border: #e1dfda;          /* decorative separators only */
+  --lb-border-strong: #7c7973;   /* control boundaries: inputs, secondary buttons (>= 3:1) */
 
-  --lb-text: #15151e;
-  --lb-text-muted: #50506a;
-  --lb-text-subtle: #6a6a80;     /* captions, shortcuts; >= 4.5:1 on bg/surface/canvas */
-  --lb-text-disabled: #8a8aa0;   /* disabled only (exempt from 4.5:1) */
+  --lb-text: #171615;
+  --lb-text-muted: #55524d;
+  --lb-text-subtle: #67645e;     /* captions, shortcuts; >= 4.5:1 on bg/surface/canvas */
+  --lb-text-disabled: #9a968f;   /* disabled only (exempt from 4.5:1) */
 
-  --lb-accent: #6a45f5;          /* primary button fill, active marks */
-  --lb-accent-hover: #5b3be0;
-  --lb-accent-pressed: #4e30c9;
+  --lb-accent: #c2410c;          /* primary button fill, active marks */
+  --lb-accent-hover: #a8380a;
+  --lb-accent-pressed: #8f2f08;
   --lb-accent-fg: #ffffff;
-  --lb-accent-text: #5b3be0;     /* violet text/links on surfaces */
-  --lb-accent-subtle: #eee9ff;   /* pill background */
-  --lb-accent-subtle-text: #4b2fc4;
-  --lb-accent-subtle-hover: #e2d9ff;
+  --lb-accent-text: #b23a0b;     /* orange text/links on surfaces */
+  --lb-accent-subtle: #fdede5;   /* pill background */
+  --lb-accent-subtle-text: #9a3209;
+  --lb-accent-subtle-hover: #fbddcc;
 
-  --lb-focus: #6a45f5;
+  --lb-focus: #c2410c;
 
   --lb-success: #117a3a;
   --lb-success-subtle: #e6f6ec;
-  --lb-warning: #9a5b00;
-  --lb-warning-subtle: #fdf3e1;
-  --lb-danger: #c62828;
-  --lb-danger-fill: #c62828;
+  --lb-warning: #8a5a00;
+  --lb-warning-subtle: #fbf3dc;
+  --lb-danger: #c8203a;
+  --lb-danger-fill: #c8203a;
   --lb-danger-fg: #ffffff;
-  --lb-danger-subtle: #fdecec;
+  --lb-danger-subtle: #fdecef;
 
   /* canvas chrome */
-  --lb-selection: #6a45f5;
-  --lb-selection-halo: rgb(106 69 245 / 0.18);
-  --lb-guide: #0e7490;
-  --lb-group-outline: #7c6fd0;
-  --lb-marquee: #6a45f5;
-  --lb-marquee-fill: rgb(106 69 245 / 0.08);
+  --lb-selection: #c2410c;
+  --lb-selection-halo: rgb(194 65 12 / 0.18);
+  --lb-guide: #0369a1;
+  --lb-group-outline: #8f6450;
+  --lb-marquee: #c2410c;
+  --lb-marquee-fill: rgb(194 65 12 / 0.08);
   --lb-handle-fill: #ffffff;
-  --lb-hud-bg: #15151e;
+  --lb-hud-bg: #171615;
   --lb-hud-text: #ffffff;
 
-  --lb-shadow-float: 0 1px 2px rgb(21 21 30 / 0.08), 0 8px 24px rgb(21 21 30 / 0.12);
-  --lb-shadow-dialog: 0 2px 4px rgb(21 21 30 / 0.08), 0 24px 48px rgb(21 21 30 / 0.18);
+  --lb-shadow-float: 0 1px 2px rgb(23 22 21 / 0.08), 0 8px 24px rgb(23 22 21 / 0.12);
+  --lb-shadow-dialog: 0 2px 4px rgb(23 22 21 / 0.08), 0 24px 48px rgb(23 22 21 / 0.18);
 
   color-scheme: light;
 }
 
 /* ── Dark values (primary theme) ── */
 :root.dark {
-  --lb-bg: #0b0b12;
-  --lb-surface: #12121b;
-  --lb-surface-raised: #1a1a26;
-  --lb-surface-hover: #1c1c29;
-  --lb-surface-active: #1f1f2e;
-  --lb-canvas: #0e0e16;
+  --lb-bg: #121212;
+  --lb-surface: #181818;
+  --lb-surface-raised: #202020;
+  --lb-surface-hover: #222222;
+  --lb-surface-active: #282828;
+  --lb-canvas: #0e0e0e;
 
-  --lb-border: #26263a;
-  --lb-border-strong: #6b6b85;
+  --lb-border: #2a2a2a;
+  --lb-border-strong: #6e6e6e;
 
-  --lb-text: #ececf4;
-  --lb-text-muted: #a1a1b5;
-  --lb-text-subtle: #8a8aa0;
-  --lb-text-disabled: #6b6b85;
+  --lb-text: #ededed;
+  --lb-text-muted: #a3a3a3;
+  --lb-text-subtle: #8e8e8e;
+  --lb-text-disabled: #666666;
 
-  --lb-accent: #6a45f5;
-  --lb-accent-hover: #5b3be0;
-  --lb-accent-pressed: #4e30c9;
-  --lb-accent-fg: #ffffff;
-  --lb-accent-text: #b9a6ff;
-  --lb-accent-subtle: #241d45;
-  --lb-accent-subtle-text: #cfc2ff;
-  --lb-accent-subtle-hover: #2b2052;
+  --lb-accent: #ff5a1f;
+  --lb-accent-hover: #ff6e3a;
+  --lb-accent-pressed: #e84e14;
+  --lb-accent-fg: #121212;
+  --lb-accent-text: #ff8a5c;
+  --lb-accent-subtle: #3a1e12;
+  --lb-accent-subtle-text: #ffb596;
+  --lb-accent-subtle-hover: #46251a;
 
-  --lb-focus: #b9a6ff;
+  --lb-focus: #ff8a5c;
 
   --lb-success: #3dd68c;
-  --lb-success-subtle: #102219;
-  --lb-warning: #f5b544;
-  --lb-warning-subtle: #2a1f0c;
-  --lb-danger: #ff7a7a;
-  --lb-danger-fill: #c93a3a;
+  --lb-success-subtle: #10221a;
+  --lb-warning: #e8b931;
+  --lb-warning-subtle: #2a230c;
+  --lb-danger: #ff6b81;
+  --lb-danger-fill: #d02e4a;
   --lb-danger-fg: #ffffff;
-  --lb-danger-subtle: #2a1416;
+  --lb-danger-subtle: #2d1318;
 
-  --lb-selection: #a78bfa;
-  --lb-selection-halo: rgb(167 139 250 / 0.22);
-  --lb-guide: #22d3ee;
-  --lb-group-outline: #8b7fd6;
-  --lb-marquee: #a78bfa;
-  --lb-marquee-fill: rgb(167 139 250 / 0.10);
-  --lb-handle-fill: #0e0e16;
-  --lb-hud-bg: #1a1a26;
-  --lb-hud-text: #ececf4;
+  --lb-selection: #ff6b33;
+  --lb-selection-halo: rgb(255 107 51 / 0.22);
+  --lb-guide: #4db8ff;
+  --lb-group-outline: #a8826e;
+  --lb-marquee: #ff6b33;
+  --lb-marquee-fill: rgb(255 107 51 / 0.10);
+  --lb-handle-fill: #0e0e0e;
+  --lb-hud-bg: #202020;
+  --lb-hud-text: #ededed;
 
   --lb-shadow-float: 0 0 0 1px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.45);
   --lb-shadow-dialog: 0 0 0 1px rgb(0 0 0 / 0.2), 0 24px 48px rgb(0 0 0 / 0.55);
