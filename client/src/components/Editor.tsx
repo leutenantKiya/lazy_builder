@@ -200,7 +200,7 @@ const Editor = ({
         return;
       }
       const dom = editor.view.nodeDOM(selection.from) as HTMLElement | null;
-      if (dom) showCard(dom);
+      if (dom && !suppressOpen.current) showCard(dom);
     };
     editor.on('selectionUpdate', onSelection);
     return () => {
@@ -229,10 +229,15 @@ const Editor = ({
     boardRef.current!.set(id, { ...node, props: { ...node.props, docs } });
   };
 
+  // set while Escape hands focus back to the pill, so that focus doesn't reopen the card
+  const suppressOpen = useRef(false);
   const closeCardAndFocusPill = () => {
     const id = card?.id;
     setCard(null);
-    if (id) wrapRef.current?.querySelector<HTMLElement>(`.figma-ref[data-node-id="${CSS.escape(id)}"]`)?.focus();
+    if (!id) return;
+    suppressOpen.current = true;
+    wrapRef.current?.querySelector<HTMLElement>(`.figma-ref[data-node-id="${CSS.escape(id)}"]`)?.focus();
+    setTimeout(() => (suppressOpen.current = false), 0);
   };
 
   return (
@@ -266,7 +271,7 @@ const Editor = ({
       }}
       onFocus={(e) => {
         const pill = (e.target as HTMLElement).closest?.<HTMLElement>('.figma-ref');
-        if (pill) showCard(pill);
+        if (pill && !suppressOpen.current) showCard(pill);
       }}
       onBlur={(e) => {
         const next = e.relatedTarget as Node | null;

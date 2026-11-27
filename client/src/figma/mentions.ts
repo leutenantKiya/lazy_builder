@@ -18,7 +18,8 @@ function textOf(el: Y.XmlElement | Y.XmlFragment, labelFor: (id: string, stored:
       }
       if (child instanceof Y.XmlElement) {
         if (child.nodeName === PILL) {
-          return labelFor(String(child.getAttribute('nodeId') ?? ''), String(child.getAttribute('label') ?? ''));
+          // padded so neighbouring pills don't run together; collectMentions tidies the spaces
+          return ` ${labelFor(String(child.getAttribute('nodeId') ?? ''), String(child.getAttribute('label') ?? ''))} `;
         }
         return textOf(child, labelFor);
       }
@@ -44,7 +45,11 @@ export function collectMentions(
       if (!id) continue;
       const list = out.get(id) ?? [];
       // the block the pill sits in (paragraph, heading, list item) is the snippet
-      list.push({ snippet: textOf(el, labelFor).replace(/\s+/g, ' ').trim(), index: list.length });
+      const snippet = textOf(el, labelFor)
+        .replace(/\s+/g, ' ')
+        .replace(/\s+([,.;:!?])/g, '$1')
+        .trim();
+      list.push({ snippet, index: list.length });
       out.set(id, list);
     }
   };

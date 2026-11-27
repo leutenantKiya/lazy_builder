@@ -61,6 +61,7 @@ export const FigmaRef = Node.create<Options>({
   // shows the live name instead of the stored one. The label arrives through the
   // decoration below, which changes whenever the canvas does, so ProseMirror calls update().
   addNodeView() {
+    const { getStatus, getLabel } = this.options;
     return ({ node }) => {
       const dom = document.createElement('span');
       dom.className = 'figma-ref';
@@ -72,7 +73,9 @@ export const FigmaRef = Node.create<Options>({
         dom.setAttribute('aria-label', `Canvas link: ${label}`);
         dom.textContent = label;
       };
-      paint(node.attrs.nodeId, node.attrs.label || 'Canvas link');
+      // new views (paragraph merges, paste, undo, remote inserts) start from the live name too
+      const initial = getStatus(node.attrs.nodeId) === 'ok' ? getLabel(node.attrs.nodeId) : undefined;
+      paint(node.attrs.nodeId, initial || node.attrs.label || 'Canvas link');
       return {
         dom,
         update: (updated, decorations) => {
