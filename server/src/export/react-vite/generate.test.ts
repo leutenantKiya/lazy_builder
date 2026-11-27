@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { strFromU8, unzipSync } from "fflate";
 import { zipProject } from "../index.ts";
 import { generateReactVite, slugify } from "./generate.ts";
+import type { CanvasNode } from "../ir.ts";
 import { KITCHEN_SINK } from "./fixtures.ts";
 
 describe("generateReactVite", () => {
-  const files = generateReactVite({ projectName: "My Landing!", nodes: KITCHEN_SINK });
+  const { files, skipped } = generateReactVite({ projectName: "My Landing!", nodes: KITCHEN_SINK });
 
   test("emits the project scaffold", () => {
     for (const f of ["package.json", "vite.config.ts", "tsconfig.json", "index.html", "src/main.tsx", "src/App.tsx", "src/index.css"]) {
@@ -21,7 +22,7 @@ describe("generateReactVite", () => {
         (n) => `src/components/ui/${n}.tsx`,
       ),
     );
-    const sparse = generateReactVite({ projectName: "x", nodes: [KITCHEN_SINK[3]!] });
+    const sparse = generateReactVite({ projectName: "x", nodes: [KITCHEN_SINK[3]!] }).files;
     expect(Object.keys(sparse).filter((f) => f.includes("/ui/"))).toEqual(["src/components/ui/Button.tsx"]);
   });
 
@@ -33,9 +34,39 @@ describe("generateReactVite", () => {
     expect(files["src/App.tsx"]).not.toContain("Group1");
   });
 
-  test("normalizes layout to a padded origin", () => {
-    // left-most root is x=40 -> 32px padding
-    expect(files["src/App.tsx"]).toContain("left: 32, top: 32, width: 360, height: 220");
+  test("uses the page frame as the origin, no normalisation", () => {
+    expect(skipped).toBe(0);
+    expect(files["src/App.tsx"]).toContain("left: 40, top: 40, width: 360, height: 220");
+    expect(files["src/App.tsx"]).toContain('className="relative mx-auto overflow-hidden" style={{ width: 1440, minHeight: 810 }}');
+  });
+
+  const at = (id: string, x: number, y: number, w = 100, h = 50): CanvasNode => ({ id, type: "box", x, y, width: w, height: h, props: {} });
+
+  test("fully outside top-level nodes are skipped and counted", () => {
+    const r = generateReactVite({
+      projectName: "x",
+      nodes: [at("in", 10, 10), at("left", -200, 10), at("right", 1440, 10), at("above", 10, -60), at("edge", -100, 10)],
+    });
+    expect(r.skipped).toBe(4);
+    expect((r.files["src/App.tsx"]!.match(/<Box \/>/g) ?? []).length).toBe(1);
+  });
+
+  test("partly outside nodes are kept (clipped by the frame)", () => {
+    const r = generateReactVite({ projectName: "x", nodes: [at("l", -50, 10), at("r", 1400, 10), at("t", 10, -20)] });
+    expect(r.skipped).toBe(0);
+    expect(r.files["src/App.tsx"]).toContain("left: -50, top: 10");
+  });
+
+  test("nodes below the fold are kept and the page grows", () => {
+    const r = generateReactVite({ projectName: "x", nodes: [at("far", 10, 2000, 100, 100)] });
+    expect(r.skipped).toBe(0);
+    expect(r.files["src/App.tsx"]).toContain("minHeight: 2180");
+  });
+
+  test("uses a custom page width and fold; defaults when no page is given", () => {
+    const m = generateReactVite({ projectName: "x", nodes: [at("a", 10, 10)], page: { width: 390, foldHeight: 844 } });
+    expect(m.files["src/App.tsx"]).toContain("width: 390, minHeight: 844");
+    expect(generateReactVite({ projectName: "x", nodes: [] }).files["src/App.tsx"]).toContain("width: 1440, minHeight: 810");
   });
 
   test("text is emitted as string literals, comments can't be closed early", () => {
@@ -45,7 +76,7 @@ describe("generateReactVite", () => {
   });
 
   test("empty canvas still produces a valid app", () => {
-    const empty = generateReactVite({ projectName: "Empty", nodes: [] });
+    const empty = generateReactVite({ projectName: "Empty", nodes: [] }).files;
     expect(empty["src/App.tsx"]).toContain("the canvas was empty");
   });
 

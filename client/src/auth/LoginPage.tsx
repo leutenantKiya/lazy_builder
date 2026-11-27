@@ -91,7 +91,7 @@ export default function LoginPage() {
 
           <div className="animate-[lb-rise_var(--duration-moment)_var(--ease-out)_both] rounded-xl bg-surface p-5 sm:p-8 dark:border dark:border-border">
             <div className="mb-6 flex items-center gap-2">
-              <Monogram />
+              <Monogram size={20} />
               <span className="text-sm font-medium text-text">Lazy Builder</span>
             </div>
 

@@ -1,11 +1,18 @@
-// placeholder product mark: 16px accent square with an L (system.md 6.3)
-export default function Monogram() {
+// product mark: an ink block and an orange block snapping into an "L".
+// The ink block follows the text colour so it works on both themes; the orange is the brand colour.
+export const MARK_ORANGE = '#ff5a1f';
+
+export default function Monogram({ size = 16 }: { size?: number }) {
   return (
-    <span
+    <svg
       aria-hidden="true"
-      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-accent text-[10px] font-semibold leading-none text-accent-fg"
+      width={size}
+      height={size}
+      viewBox="0 -10 70 70"
+      className="shrink-0 text-text"
     >
-      L
-    </span>
+      <rect x="0" y="0" width="26" height="48" rx="6" fill="currentColor" />
+      <rect x="30" y="30" width="40" height="20" rx="5" fill={MARK_ORANGE} />
+    </svg>
   );
 }

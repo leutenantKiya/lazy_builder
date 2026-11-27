@@ -5,7 +5,7 @@ import { db } from "../db/client.ts";
 import { memberRole, users, workspaceMembers, workspaces } from "../db/schema.ts";
 import { hocuspocus } from "../collab/server.ts";
 import { generatorFor, zipProject } from "../export/index.ts";
-import { readCanvas } from "../export/ir.ts";
+import { readCanvas, readPage } from "../export/ir.ts";
 import { EXPORT_TARGET_IDS, findTarget } from "../export/targets.ts";
 import { body } from "../lib/validate.ts";
 import { atLeast, getRole, newInviteCode } from "../lib/workspaces.ts";
@@ -135,9 +135,12 @@ router.get("/:id/export", async (c) => {
   const conn = await hocuspocus.openDirectConnection(`${id}:figma`, { user: c.var.user, workspaceId: id });
   try {
     const nodes = conn.document ? readCanvas(conn.document) : [];
-    const { filename, bytes } = zipProject(ws.name, generate({ projectName: ws.name, nodes }));
+    const page = conn.document ? readPage(conn.document) : undefined;
+    const { files, skipped } = generate({ projectName: ws.name, nodes, page });
+    const { filename, bytes } = zipProject(ws.name, files);
     return c.body(bytes, 200, {
       "content-type": "application/zip",
+      "x-lazy-skipped": String(skipped),
       "content-disposition": `attachment; filename="${filename}"`,
     });
   } finally {

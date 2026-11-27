@@ -22,14 +22,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 // binary GET (export zip). errors still come back as the server's JSON {error}
-async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+async function download(path: string): Promise<{ blob: Blob; filename: string; skipped: number }> {
   const res = await fetch(`/api${path}`, { credentials: 'include' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new ApiError(res.status, data.error ?? res.statusText);
   }
   const match = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '');
-  return { blob: await res.blob(), filename: match?.[1] ?? 'export.zip' };
+  const skipped = Number(res.headers.get('x-lazy-skipped')) || 0;
+  return { blob: await res.blob(), filename: match?.[1] ?? 'export.zip', skipped };
 }
 
 export const api = {
