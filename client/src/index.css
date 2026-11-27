@@ -31,6 +31,26 @@ body {
   background: transparent;
   padding: 0;
 }
+/* typography colours <pre> for a dark block (gray-200 text), and the lowlight <code>
+ * has no .hljs class to pick up highlight.js's base colour: set plain code text ourselves */
+.tiptap pre,
+.tiptap pre code {
+  color: var(--lb-text);
+}
+/* highlight.js "github" light is tuned for white; on #efeeea these four drop under
+ * 4.5:1, so they get darker shades of the same hue (all >= 4.97:1) */
+:root:not(.dark) .tiptap pre :is(.hljs-doctag, .hljs-keyword, .hljs-template-tag, .hljs-template-variable, .hljs-type) {
+  color: #b3203b;
+}
+:root:not(.dark) .tiptap pre :is(.hljs-built_in, .hljs-symbol) {
+  color: #9a4a06;
+}
+:root:not(.dark) .tiptap pre :is(.hljs-comment, .hljs-code, .hljs-formula) {
+  color: #57606a;
+}
+:root:not(.dark) .tiptap pre :is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo) {
+  color: #1a7535;
+}
 
 /* ── Light values (also the fallback before the theme class is set) ── */
 /* Palette A "Workshop": neutral graphite on warm paper, safety-orange accent.
