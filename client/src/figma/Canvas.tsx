@@ -89,6 +89,8 @@ const PALETTE: { type: NodeType }[] = [
 ];
 
 const SNAP = 6;
+// low enough that a 1440 page fits a phone-width canvas
+const MIN_ZOOM = 0.1;
 
 type Guides = { x: number[]; y: number[] };
 type View = { scale: number; tx: number; ty: number };
@@ -227,6 +229,12 @@ export default function Canvas({
   const handledJump = useRef(0);
   useEffect(() => {
     if (!active || !jump || jump.n === handledJump.current) return;
+    // a request that couldn't run right away (canvas not measurable yet) must not fire
+    // seconds later and move the view under someone's hands
+    if (Date.now() - jump.n > 2000) {
+      handledJump.current = jump.n;
+      return;
+    }
     // marked handled only once the pan happens: a re-run cancels the pending frame,
     // and must not then skip the jump as already done
     const frame = requestAnimationFrame(() => {
@@ -243,7 +251,7 @@ export default function Canvas({
       setView((prev) => {
         // keep the current zoom unless the element wouldn't fit
         const fit = Math.min((rect.width * 0.8) / box.width, (rect.height * 0.8) / box.height);
-        const scale = clamp(Math.min(prev.scale, fit), 0.2, 4);
+        const scale = clamp(Math.min(prev.scale, fit), MIN_ZOOM, 4);
         return {
           scale,
           tx: rect.width / 2 - (box.x + box.width / 2) * scale,
@@ -259,7 +267,7 @@ export default function Canvas({
   const fitted = useRef(false);
   // the whole page width in view, never zoomed in past 100%
   const fitPageView = (rect: DOMRect): View => {
-    const scale = clamp((rect.width - 64) / page.width, 0.2, 1);
+    const scale = clamp((rect.width - 64) / page.width, MIN_ZOOM, 1);
     return { scale, tx: Math.max(32, (rect.width - page.width * scale) / 2), ty: 40 };
   };
   const fitPage = () => {
@@ -416,7 +424,7 @@ export default function Canvas({
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
       setView((prev) => {
-        const scale = clamp(prev.scale * (1 - e.deltaY * 0.001), 0.2, 4);
+        const scale = clamp(prev.scale * (1 - e.deltaY * 0.001), MIN_ZOOM, 4);
         const worldX = (sx - prev.tx) / prev.scale;
         const worldY = (sy - prev.ty) / prev.scale;
         return { scale, tx: sx - worldX * scale, ty: sy - worldY * scale };
@@ -764,7 +772,7 @@ export default function Canvas({
     const sx = rect ? rect.width / 2 : 0;
     const sy = rect ? rect.height / 2 : 0;
     setView((prev) => {
-      const scale = clamp(prev.scale * factor, 0.2, 4);
+      const scale = clamp(prev.scale * factor, MIN_ZOOM, 4);
       const worldX = (sx - prev.tx) / prev.scale;
       const worldY = (sy - prev.ty) / prev.scale;
       return { scale, tx: sx - worldX * scale, ty: sy - worldY * scale };

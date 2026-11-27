@@ -75,14 +75,16 @@ export function PageFrame({
   // keep the outline and fold line 1px on screen at any zoom
   const hair = 1 / zoom;
   const area: CSSProperties = { left: 0, top: 0, width: page.width, height, outline: `${hair}px solid var(--lb-border-strong)` };
-  const showLabels = zoom >= 0.5;
+  // labels live in the scaled layer; counter-scale them so they stay 11px on screen
+  const showLabels = zoom >= 0.15;
+  const labelSize = 11 / zoom;
   return (
     <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0">
       <div style={area} className="absolute bg-surface" />
       {showLabels && (
         <span
-          style={{ left: 0, bottom: '100%', marginBottom: 6 }}
-          className="absolute whitespace-nowrap text-2xs font-medium text-text-subtle"
+          style={{ left: 0, bottom: '100%', marginBottom: 6 / zoom, fontSize: labelSize, lineHeight: 1.3 }}
+          className="absolute whitespace-nowrap font-medium text-text-subtle"
         >
           {page.name} · {page.width}
         </span>
@@ -93,8 +95,8 @@ export function PageFrame({
       />
       {showLabels && (
         <span
-          style={{ left: page.width, top: page.foldHeight, transform: 'translate(-100%, -100%)', marginTop: -4, marginLeft: -8 }}
-          className="absolute whitespace-nowrap text-2xs text-text-subtle"
+          style={{ left: page.width, top: page.foldHeight, transform: 'translate(-100%, -100%)', marginTop: -4 / zoom, marginLeft: -8 / zoom, fontSize: labelSize, lineHeight: 1.3 }}
+          className="absolute whitespace-nowrap text-text-subtle"
         >
           First screen
         </span>
