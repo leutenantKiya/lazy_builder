@@ -1,8 +1,29 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import * as Y from 'yjs';
 import { connectDoc } from '../lib/collab';
+import {
+  FrameCorners,
+  Cards,
+  Square,
+  TextT,
+  CursorClick,
+  Textbox,
+  Image as ImageIcon,
+  Minus,
+  Tag,
+  ToggleRight,
+  SelectionPlus,
+  SelectionSlash,
+  Note,
+  CaretRight,
+  CaretDown,
+  Plus,
+  Trash,
+} from '@phosphor-icons/react';
+import type { Icon } from '@phosphor-icons/react';
 import type { CanvasNode, NodeType } from './types';
+import { btnSecondary, btnDangerGhost } from '../workspace/ui';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -27,17 +48,31 @@ const DEFAULTS: Record<NodeType, { width: number; height: number; props: Record<
   group:   { width: 0,   height: 0,   props: { childIds: [] as string[] } },
 };
 
-const PALETTE: { type: NodeType; icon: string; label?: string }[] = [
-  { type: 'card',    icon: '🃏' },
-  { type: 'frame',   icon: '▭' },
-  { type: 'box',     icon: '■' },
-  { type: 'text',    icon: 'T' },
-  { type: 'button',  icon: '◉' },
-  { type: 'input',   icon: '⌨' },
-  { type: 'image',   icon: '🖼' },
-  { type: 'divider', icon: '—' },
-  { type: 'badge',   icon: '⬡' },
-  { type: 'toggle',  icon: '⊘' },
+const NODE_ICONS: Record<string, Icon> = {
+  frame: FrameCorners,
+  card: Cards,
+  box: Square,
+  text: TextT,
+  button: CursorClick,
+  input: Textbox,
+  image: ImageIcon,
+  divider: Minus,
+  badge: Tag,
+  toggle: ToggleRight,
+  group: SelectionPlus,
+};
+
+const PALETTE: { type: NodeType }[] = [
+  { type: 'card' },
+  { type: 'frame' },
+  { type: 'box' },
+  { type: 'text' },
+  { type: 'button' },
+  { type: 'input' },
+  { type: 'image' },
+  { type: 'divider' },
+  { type: 'badge' },
+  { type: 'toggle' },
 ];
 
 const SNAP = 6;
@@ -90,10 +125,16 @@ export default function Canvas({
   boardId,
   selectedNodeId,
   onNodeSelect,
+  exportTick = 0,
+  readOnly = false,
 }: {
   boardId: string;
   selectedNodeId?: string | null;
   onNodeSelect?: (id: string | null) => void;
+  /** bumps once per successful export; the canvas traces node outlines in response */
+  exportTick?: number;
+  /** viewers: look, select and zoom, but nothing that writes to the board */
+  readOnly?: boolean;
 }) {
   const [{ ydoc, ynodes }] = useState(() => {
     const ydoc = new Y.Doc();
@@ -108,6 +149,8 @@ export default function Canvas({
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
   const [marquee, setMarquee] = useState<Marquee>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [trace, setTrace] = useState(0);
+  const lastTick = useRef(exportTick);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number; childIds: Set<string> } | null>(null);
@@ -137,10 +180,11 @@ export default function Canvas({
       } else {
         next.add(id);
       }
-      setLastSelectedId(id);
-      onNodeSelect?.(id);
       return next;
     });
+    // outside the updater: updaters must be pure, and this sets parent state
+    setLastSelectedId(id);
+    onNodeSelect?.(id);
   }, [onNodeSelect]);
 
   // called when user clicks a FigmaRef in the Notion doc
@@ -149,6 +193,16 @@ export default function Canvas({
       selectSingle(selectedNodeId);
     }
   }, [selectedNodeId]);
+
+  // export finished: trace every node outline once (skipped under reduced motion)
+  useEffect(() => {
+    if (exportTick === lastTick.current) return;
+    lastTick.current = exportTick;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setTrace(exportTick);
+    const t = setTimeout(() => setTrace(0), 1200);
+    return () => clearTimeout(t);
+  }, [exportTick]);
 
   // ── Yjs connection ────────────────────────────────────────────────
 
@@ -181,12 +235,14 @@ export default function Canvas({
       // Ctrl+G → group
       if (mod && e.key === 'g' && !e.shiftKey) {
         e.preventDefault();
+        if (readOnly) return;
         groupSelected();
         return;
       }
       // Ctrl+Shift+G → ungroup
       if (mod && e.key === 'g' && e.shiftKey) {
         e.preventDefault();
+        if (readOnly) return;
         ungroupSelected();
         return;
       }
@@ -194,6 +250,7 @@ export default function Canvas({
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // skip if user is typing somewhere
         if ((e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'INPUT') return;
+        if (readOnly) return;
         e.preventDefault();
         deleteSelected();
         return;
@@ -214,7 +271,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [nodes, selectedIds]);
+  }, [nodes, selectedIds, readOnly]);
 
   // ── Coordinate conversion ──────────────────────────────────────────
 
@@ -248,6 +305,7 @@ export default function Canvas({
   // ── Node CRUD ──────────────────────────────────────────────────────
 
   const addNode = (type: NodeType) => {
+    if (readOnly) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     const cx = rect ? (rect.width / 2 - view.tx) / view.scale : 80;
     const cy = rect ? (rect.height / 2 - view.ty) / view.scale : 80;
@@ -266,6 +324,7 @@ export default function Canvas({
   };
 
   const deleteSelected = () => {
+    if (readOnly) return;
     if (!selectedIds.size) return;
     ydoc.transact(() => {
       for (const id of selectedIds) {
@@ -295,6 +354,7 @@ export default function Canvas({
   };
 
   const updateDocs = (docs: string) => {
+    if (readOnly) return;
     if (!lastSelectedId) return;
     const node = ynodes.get(lastSelectedId);
     if (!node) return;
@@ -302,6 +362,7 @@ export default function Canvas({
   };
 
   const renameNode = (id: string, name: string) => {
+    if (readOnly) return;
     const node = ynodes.get(id);
     if (!node) return;
     const key = ['text', 'badge'].includes(node.type) ? 'text' : node.type === 'input' ? 'placeholder' : 'label';
@@ -319,6 +380,7 @@ export default function Canvas({
   // ── Group / Ungroup ────────────────────────────────────────────────
 
   const groupSelected = () => {
+    if (readOnly) return;
     // need at least 2 ungrouped nodes selected
     const toGroup = Array.from(selectedIds)
       .map((id) => ynodes.get(id))
@@ -357,6 +419,7 @@ export default function Canvas({
   };
 
   const ungroupSelected = () => {
+    if (readOnly) return;
     const groups = Array.from(selectedIds)
       .map((id) => ynodes.get(id))
       .filter((n): n is CanvasNode => !!n && n.type === 'group');
@@ -392,6 +455,7 @@ export default function Canvas({
   const MIN_SIZE = 20;
 
   const startResize = (e: ReactPointerEvent, nodeId: string, dir: HandleDir) => {
+    if (readOnly) return;
     e.stopPropagation();
     const node = ynodes.get(nodeId);
     if (!node) return;
@@ -468,6 +532,7 @@ export default function Canvas({
     if (!selectedIds.has(node.id)) {
       selectSingle(node.id);
     }
+    if (readOnly) return;
 
     const w = toWorld(e.clientX, e.clientY);
 
@@ -569,6 +634,18 @@ export default function Canvas({
     setGuides({ x: [], y: [] });
   };
 
+  const zoomBy = (factor: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const sx = rect ? rect.width / 2 : 0;
+    const sy = rect ? rect.height / 2 : 0;
+    setView((prev) => {
+      const scale = clamp(prev.scale * factor, 0.2, 4);
+      const worldX = (sx - prev.tx) / prev.scale;
+      const worldY = (sy - prev.ty) / prev.scale;
+      return { scale, tx: sx - worldX * scale, ty: sy - worldY * scale };
+    });
+  };
+
   // ── Derived state ──────────────────────────────────────────────────
 
   const selected = lastSelectedId ? (nodes.find((n) => n.id === lastSelectedId) ?? null) : null;
@@ -584,6 +661,14 @@ export default function Canvas({
     transformOrigin: '0 0',
   };
 
+  // absolute boxes for the export trace (children are stored relative to their group)
+  const traceBoxes = trace
+    ? nodes.map((n) => {
+        const parent = n.props.parentId ? nodes.find((p) => p.id === n.props.parentId) : undefined;
+        return { id: n.id, x: n.x + (parent?.x ?? 0), y: n.y + (parent?.y ?? 0), width: n.width, height: n.height };
+      })
+    : [];
+
   // convert marquee to screen pixels for rendering
   const marqueeRect = marquee
     ? {
@@ -594,6 +679,9 @@ export default function Canvas({
       }
     : null;
 
+  const kbd = 'rounded-sm bg-surface-active px-[5px] py-px font-sans text-[11px] font-medium text-text-muted';
+  const sectionHeading = 'text-xs font-medium text-text-muted';
+
   return (
     <div className="flex h-full w-full">
       <div
@@ -602,7 +690,7 @@ export default function Canvas({
         onPointerUp={end}
         onPointerLeave={end}
         onPointerDown={startPan}
-        className="relative h-full flex-1 cursor-grab touch-none overflow-hidden bg-neutral-50 active:cursor-grabbing dark:bg-neutral-950"
+        className="relative h-full flex-1 cursor-grab touch-none overflow-hidden bg-canvas active:cursor-grabbing"
       >
         <div className="absolute left-0 top-0" style={worldStyle}>
           {rootNodes.map((node) => (
@@ -611,9 +699,39 @@ export default function Canvas({
               node={node}
               allNodes={nodes}
               selected={selectedIds.has(node.id)}
+              multi={selectedIds.size > 1}
+              zoom={view.scale}
               onPointerDown={(e) => startDrag(e, node)}
               onResizeStart={startResize}
+              editable={!readOnly}
             />
+          ))}
+
+          {/* export trace: each outline draws once, staggered by layer order */}
+          {traceBoxes.map((b, i) => (
+            <svg
+              key={`${trace}-${b.id}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute overflow-visible"
+              style={{ left: b.x, top: b.y, width: b.width, height: b.height }}
+            >
+              <rect
+                x="0.5"
+                y="0.5"
+                rx="4"
+                pathLength={1}
+                vectorEffect="non-scaling-stroke"
+                className="fill-none stroke-selection"
+                style={{
+                  width: 'calc(100% - 1px)',
+                  height: 'calc(100% - 1px)',
+                  strokeWidth: 1,
+                  strokeDasharray: 1,
+                  strokeDashoffset: 1,
+                  animation: `lb-trace var(--duration-moment) var(--ease-out) ${Math.min(i * 20, 200)}ms both`,
+                }}
+              />
+            </svg>
           ))}
         </div>
 
@@ -622,14 +740,14 @@ export default function Canvas({
           <div
             key={`vx${i}`}
             style={{ left: gx * view.scale + view.tx }}
-            className="pointer-events-none absolute bottom-0 top-0 w-px bg-fuchsia-500"
+            className="pointer-events-none absolute bottom-0 top-0 w-px bg-guide"
           />
         ))}
         {guides.y.map((gy, i) => (
           <div
             key={`hy${i}`}
             style={{ top: gy * view.scale + view.ty }}
-            className="pointer-events-none absolute left-0 right-0 h-px bg-fuchsia-500"
+            className="pointer-events-none absolute left-0 right-0 h-px bg-guide"
           />
         ))}
 
@@ -637,13 +755,13 @@ export default function Canvas({
         {marqueeRect && (
           <div
             style={marqueeRect}
-            className="pointer-events-none absolute border-2 border-dashed border-violet-400 bg-violet-400/10"
+            className="pointer-events-none absolute border border-dashed border-marquee bg-marquee-fill"
           />
         )}
 
         {/* HUD */}
         {selected && (
-          <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-2 py-1 font-mono text-xs text-white">
+          <div className="pointer-events-none absolute left-2 top-2 rounded-sm bg-hud-bg px-1.5 py-0.5 font-mono text-2xs tabular-nums text-hud-text">
             {selected.type} · {selected.width}×{selected.height} @ {selected.x},{selected.y}
             {selectedIds.size > 1 && ` (${selectedIds.size} selected)`}
           </div>
@@ -652,63 +770,101 @@ export default function Canvas({
         {/* zoom controls */}
         <div
           onPointerDown={(e) => e.stopPropagation()}
-          className="absolute bottom-2 right-2 flex items-center gap-2 rounded-md bg-black/70 px-2 py-1 text-xs text-white"
+          className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-hud-bg p-1 text-hud-text"
         >
-          <span className="font-mono">{Math.round(view.scale * 100)}%</span>
+          <button
+            onClick={() => zoomBy(1 / 1.2)}
+            aria-label="Zoom out"
+            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/15 focus-visible:outline-offset-0"
+          >
+            <Minus size={14} aria-hidden="true" />
+          </button>
+          <span className="min-w-[3ch] text-center font-mono text-2xs tabular-nums" aria-live="off">
+            {Math.round(view.scale * 100)}%
+          </span>
+          <button
+            onClick={() => zoomBy(1.2)}
+            aria-label="Zoom in"
+            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-white/15 focus-visible:outline-offset-0"
+          >
+            <Plus size={14} aria-hidden="true" />
+          </button>
           <button
             onClick={() => setView({ scale: 1, tx: 0, ty: 0 })}
-            className="rounded bg-white/20 px-1.5 py-0.5 hover:bg-white/30"
+            aria-label="Reset zoom to 100%"
+            className="h-6 rounded-md px-2 text-xs font-medium hover:bg-white/15 focus-visible:outline-offset-0"
           >
             Reset
           </button>
         </div>
       </div>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────── */}
-      <aside className="w-52 shrink-0 overflow-auto border-l border-neutral-200 p-3 dark:border-neutral-800">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Components
-        </h3>
-        <div className="grid grid-cols-2 gap-1">
-          {PALETTE.map(({ type, icon }) => (
+      {/* ── Side panel ──────────────────────────────────────────────── */}
+      <aside
+        aria-label="Canvas tools"
+        className="flex w-[232px] shrink-0 flex-col gap-5 overflow-auto border-l border-border bg-surface p-3"
+      >
+        {readOnly ? (
+          <p className="rounded-md bg-surface-hover px-2.5 py-2 text-xs text-text-muted">
+            View only. You can select, zoom and read docs, but not change the canvas.
+          </p>
+        ) : (
+        <>
+        <section aria-labelledby="canvas-add">
+          <h3 id="canvas-add" className={`mb-2 ${sectionHeading}`}>
+            Add
+          </h3>
+          <div className="grid grid-cols-2 gap-1">
+            {PALETTE.map(({ type }) => {
+              const TypeIcon = NODE_ICONS[type];
+              return (
+                <button
+                  key={type}
+                  onClick={() => addNode(type)}
+                  className="flex h-8 items-center gap-1.5 rounded-md bg-surface-hover px-2 text-left text-xs capitalize text-text transition-[background-color,transform] duration-fast ease-out hover:bg-surface-active active:scale-[.98] active:duration-press"
+                >
+                  <TypeIcon size={16} aria-hidden="true" className="shrink-0 text-text-muted" />
+                  {type}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section aria-label="Selection actions" className="flex flex-col gap-1">
+          <div className="flex gap-1">
             <button
-              key={type}
-              onClick={() => addNode(type)}
-              className="flex items-center gap-1.5 rounded-md border border-neutral-200 px-2 py-1.5 text-left text-xs capitalize hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+              onClick={groupSelected}
+              disabled={!canGroup}
+              className={`${btnSecondary} !h-7 flex-1 !px-2`}
+              title="Group (Ctrl+G)"
+              aria-keyshortcuts="Control+G"
             >
-              <span className="text-neutral-500">{icon}</span>
-              {type}
+              <SelectionPlus size={16} aria-hidden="true" />
+              Group
             </button>
-          ))}
-        </div>
-
-        {/* group/ungroup */}
-        <div className="mt-3 flex gap-1">
-          <button
-            onClick={groupSelected}
-            disabled={!canGroup}
-            className="flex-1 rounded-md border border-neutral-200 px-2 py-1.5 text-xs hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
-            title="Ctrl+G"
-          >
-            ⊞ Group
-          </button>
-          <button
-            onClick={ungroupSelected}
-            disabled={!canUngroup}
-            className="flex-1 rounded-md border border-neutral-200 px-2 py-1.5 text-xs hover:bg-neutral-100 disabled:opacity-40 dark:border-neutral-700 dark:hover:bg-neutral-800"
-            title="Ctrl+Shift+G"
-          >
-            ⊟ Ungroup
-          </button>
-        </div>
-
-        {selectedIds.size > 0 && (
+            <button
+              onClick={ungroupSelected}
+              disabled={!canUngroup}
+              className={`${btnSecondary} !h-7 flex-1 !px-2`}
+              title="Ungroup (Ctrl+Shift+G)"
+              aria-keyshortcuts="Control+Shift+G"
+            >
+              <SelectionSlash size={16} aria-hidden="true" />
+              Ungroup
+            </button>
+          </div>
+          {/* always rendered so the layer list below doesn't jump when a selection appears */}
           <button
             onClick={deleteSelected}
-            className="mt-3 w-full rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+            disabled={selectedIds.size === 0}
+            className={`${btnDangerGhost} !h-7 w-full`}
           >
-            Delete {selectedIds.size > 1 ? `(${selectedIds.size})` : ''}
+            <Trash size={16} aria-hidden="true" />
+            Delete selected{selectedIds.size > 1 ? ` (${selectedIds.size})` : ''}
           </button>
+        </section>
+        </>
         )}
 
         <LayerTree
@@ -717,45 +873,45 @@ export default function Canvas({
           expandedGroups={expandedGroups}
           onSelect={(id) => selectSingle(id)}
           onToggleExpand={toggleExpand}
-          onRename={renameNode}
+          onRename={readOnly ? undefined : renameNode}
+          headingClass={sectionHeading}
         />
 
         {/* docs panel */}
         {selected && (
-          <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              📄 Docs
-            </h3>
+          <section>
+            <label htmlFor="node-docs" className={`mb-2 block ${sectionHeading}`}>
+              Docs
+            </label>
             <textarea
+              id="node-docs"
               value={String(selected.props.docs ?? '')}
               onChange={(e) => updateDocs(e.target.value)}
-              placeholder="Add documentation for this node…"
+              readOnly={readOnly}
+              placeholder={readOnly ? 'No docs for this node.' : 'Add documentation for this node…'}
               rows={6}
-              className="w-full resize-y rounded-md border border-neutral-200 bg-transparent px-2 py-1.5 text-xs text-neutral-800 placeholder:text-neutral-400 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400 dark:border-neutral-700 dark:text-neutral-200 dark:placeholder:text-neutral-600"
+              className="w-full resize-y rounded-md border border-border-strong bg-transparent px-2.5 py-1.5 text-sm text-text placeholder:text-text-subtle hover:border-text-muted"
             />
-          </div>
+          </section>
         )}
 
         {/* shortcuts hint */}
-        <div className="mt-4 text-[10px] leading-relaxed text-neutral-400">
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Shift</kbd>+click → multi-select</p>
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Shift</kbd>+drag → marquee</p>
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Ctrl+G</kbd> → group</p>
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Ctrl+Shift+G</kbd> → ungroup</p>
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Ctrl+A</kbd> → select all</p>
-          <p><kbd className="rounded bg-neutral-200 px-1 dark:bg-neutral-700">Del</kbd> → delete</p>
-        </div>
+        {!readOnly && (
+        <section aria-label="Shortcuts" className="space-y-1 text-xs text-text-subtle">
+          <p><kbd className={kbd}>Shift</kbd> + click: Multi-select</p>
+          <p><kbd className={kbd}>Shift</kbd> + drag: Marquee</p>
+          <p><kbd className={kbd}>Ctrl</kbd> + <kbd className={kbd}>G</kbd>: Group</p>
+          <p><kbd className={kbd}>Ctrl</kbd> + <kbd className={kbd}>Shift</kbd> + <kbd className={kbd}>G</kbd>: Ungroup</p>
+          <p><kbd className={kbd}>Ctrl</kbd> + <kbd className={kbd}>A</kbd>: Select all</p>
+          <p><kbd className={kbd}>Del</kbd>: Delete</p>
+        </section>
+        )}
       </aside>
     </div>
   );
 }
 
 // ── LayerTree ────────────────────────────────────────────────────────
-
-const NODE_ICONS: Record<string, string> = {
-  frame: '▭', card: '🃏', box: '■', text: 'T', button: '◉',
-  input: '⌨', image: '🖼', divider: '—', badge: '⬡', toggle: '⊘', group: '⊞',
-};
 
 function nodeDisplayName(node: CanvasNode): string {
   if (node.type === 'text' || node.type === 'badge') return String(node.props.text ?? node.type);
@@ -771,119 +927,224 @@ function LayerTree({
   onSelect,
   onToggleExpand,
   onRename,
+  headingClass,
 }: {
   nodes: CanvasNode[];
   selectedIds: Set<string>;
   expandedGroups: Set<string>;
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
-  onRename: (id: string, name: string) => void;
+  /** omitted for viewers: no F2 / double-click rename */
+  onRename?: (id: string, name: string) => void;
+  headingClass: string;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
 
   const startRename = (node: CanvasNode) => {
+    if (!onRename) return;
     setEditingId(node.id);
     setEditValue(nodeDisplayName(node));
     setTimeout(() => inputRef.current?.select(), 0);
   };
 
   const commitRename = () => {
-    if (editingId && editValue.trim()) onRename(editingId, editValue.trim());
+    const id = editingId;
+    if (id && editValue.trim()) onRename?.(id, editValue.trim());
     setEditingId(null);
+    // the input unmounts; put focus back on its row instead of <body>
+    if (id) setTimeout(() => treeRef.current?.querySelector<HTMLElement>(`[data-layer-id="${id}"]`)?.focus(), 0);
   };
 
   const rootNodes = nodes.filter((n) => !n.props.parentId);
   const childrenOf = (parentId: string) => nodes.filter((n) => n.props.parentId === parentId);
+
+  // roving tab stop: the first selected visible row, else the first row
+  const visible: string[] = [];
+  const walk = (n: CanvasNode) => {
+    visible.push(n.id);
+    if (n.type === 'group' && expandedGroups.has(n.id)) childrenOf(n.id).forEach(walk);
+  };
+  rootNodes.forEach(walk);
+  const tabStop = visible.find((id) => selectedIds.has(id)) ?? visible[0];
+
+  const onRowKey = (e: ReactKeyboardEvent<HTMLDivElement>, node: CanvasNode, isGroup: boolean, isExpanded: boolean) => {
+    if (e.target !== e.currentTarget) return; // keys typed in the rename field stay there
+    const items = Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? []);
+    const i = items.indexOf(e.currentTarget);
+    const level = Number(e.currentTarget.getAttribute('aria-level'));
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        items[i + 1]?.focus();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        items[i - 1]?.focus();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (isGroup && !isExpanded) onToggleExpand(node.id);
+        else if (isGroup) items[i + 1]?.focus();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (isGroup && isExpanded) onToggleExpand(node.id);
+        else if (level > 1) {
+          for (let j = i - 1; j >= 0; j--) {
+            if (Number(items[j].getAttribute('aria-level')) < level) {
+              items[j].focus();
+              break;
+            }
+          }
+        }
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        onSelect(node.id);
+        break;
+      case 'F2':
+        e.preventDefault();
+        startRename(node);
+        break;
+    }
+  };
 
   const renderNode = (node: CanvasNode, depth: number) => {
     const isGroup = node.type === 'group';
     const isExpanded = expandedGroups.has(node.id);
     const isSelected = selectedIds.has(node.id);
     const children = isGroup ? childrenOf(node.id) : [];
+    const RowIcon = NODE_ICONS[node.type] ?? Square;
 
     return (
-      <div key={node.id}>
+      <div key={node.id} role="none">
         <div
-          className={`group flex items-center gap-1 rounded px-1 py-0.5 text-xs cursor-pointer ${
-            isSelected
-              ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300'
-              : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          role="treeitem"
+          data-layer-id={node.id}
+          aria-level={depth + 1}
+          aria-selected={isSelected}
+          aria-expanded={isGroup ? isExpanded : undefined}
+          tabIndex={node.id === tabStop ? 0 : -1}
+          className={`group flex h-7 cursor-pointer items-center gap-1 rounded-sm pr-1 text-sm focus-visible:-outline-offset-2 ${
+            isSelected ? 'bg-accent-subtle text-accent-subtle-text' : 'text-text hover:bg-surface-hover'
           }`}
           style={{ paddingLeft: depth * 12 + 4 }}
           onClick={() => onSelect(node.id)}
+          onKeyDown={(e) => onRowKey(e, node, isGroup, isExpanded)}
         >
-          {/* expand/collapse arrow for groups */}
+          {/* expand/collapse chevron for groups */}
           {isGroup ? (
             <button
+              tabIndex={-1}
+              aria-label={isExpanded ? 'Collapse group' : 'Expand group'}
               onClick={(e) => { e.stopPropagation(); onToggleExpand(node.id); }}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-text-subtle hover:bg-surface-active"
             >
-              {isExpanded ? '▾' : '▸'}
+              {isExpanded ? <CaretDown size={12} aria-hidden="true" /> : <CaretRight size={12} aria-hidden="true" />}
             </button>
           ) : (
             <span className="h-4 w-4 shrink-0" />
           )}
 
-          <span className="shrink-0 text-neutral-500">{NODE_ICONS[node.type] ?? '?'}</span>
+          <RowIcon size={14} aria-hidden="true" className={`shrink-0 ${isSelected ? '' : 'text-text-subtle'}`} />
 
           {editingId === node.id ? (
             <input
               ref={inputRef}
               value={editValue}
+              aria-label="Layer name"
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={commitRename}
               onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingId(null); }}
               onClick={(e) => e.stopPropagation()}
-              className="ml-0.5 flex-1 rounded border border-violet-400 bg-white px-1 py-0 text-xs outline-none dark:bg-neutral-800"
+              className="ml-0.5 h-5 min-w-0 flex-1 rounded-sm border border-selection bg-surface px-1 text-sm text-text"
             />
           ) : (
             <span
               onDoubleClick={(e) => { e.stopPropagation(); startRename(node); }}
-              className="ml-0.5 flex-1 truncate"
+              className={`ml-0.5 flex-1 truncate ${isSelected ? 'font-medium' : ''}`}
             >
               {nodeDisplayName(node)}
             </span>
           )}
 
-          {Boolean(node.props.docs) && <span className="shrink-0 text-[9px]">📄</span>}
+          {Boolean(node.props.docs) && (
+            <span role="img" aria-label="Has docs" className="shrink-0 text-text-subtle">
+              <Note size={12} aria-hidden="true" />
+            </span>
+          )}
         </div>
 
-        {isGroup && isExpanded && children.map((child) => renderNode(child, depth + 1))}
+        {isGroup && isExpanded && (
+          <div role="group">{children.map((child) => renderNode(child, depth + 1))}</div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="mt-3">
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+    <section>
+      <h3 id="canvas-layers" className={`mb-2 ${headingClass}`}>
         Layers
       </h3>
-      <div className="max-h-48 space-y-px overflow-auto rounded-md border border-neutral-200 dark:border-neutral-700">
+      <div
+        ref={treeRef}
+        role="tree"
+        aria-labelledby="canvas-layers"
+        className="max-h-48 space-y-px overflow-auto rounded-md border border-border"
+      >
         {rootNodes.length === 0 && (
-          <p className="px-2 py-1 text-[10px] text-neutral-400">No nodes yet</p>
+          <p className="px-2 py-1.5 text-xs text-text-subtle">No layers yet. Add one from the palette above.</p>
         )}
         {rootNodes.map((n) => renderNode(n, 0))}
       </div>
-    </div>
+    </section>
   );
 }
 
 // ── NodeView ─────────────────────────────────────────────────────────
 
+const RING = {
+  hover: 'hover:outline hover:outline-1 hover:outline-selection/50',
+  selected:
+    'shadow-[0_0_0_1px_var(--lb-canvas),0_0_0_3px_var(--lb-selection),0_0_0_7px_var(--lb-selection-halo)]',
+  multi: 'shadow-[0_0_0_1px_var(--lb-selection)]',
+};
+
+function DocsBadge() {
+  return (
+    <span
+      role="img"
+      aria-label="Has docs"
+      className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-sm border border-border-strong bg-surface-raised text-text-muted"
+    >
+      <Note size={12} aria-hidden="true" />
+    </span>
+  );
+}
+
 function NodeView({
   node,
   allNodes,
   selected,
+  multi,
+  zoom,
   onPointerDown,
   onResizeStart,
+  editable = true,
 }: {
   node: CanvasNode;
   allNodes: CanvasNode[];
   selected: boolean;
+  multi: boolean;
+  zoom: number;
   onPointerDown: (e: ReactPointerEvent) => void;
   onResizeStart: (e: ReactPointerEvent, nodeId: string, dir: HandleDir) => void;
+  editable?: boolean;
 }) {
   const style: CSSProperties = {
     left: node.x,
@@ -893,8 +1154,8 @@ function NodeView({
   };
 
   const ring = selected
-    ? ' ring-2 ring-violet-500 ring-offset-1 dark:ring-offset-neutral-950'
-    : '';
+    ? ` transition-shadow duration-fast ${multi ? RING.multi : RING.selected}`
+    : ` ${RING.hover}`;
   const base = `absolute flex items-center justify-center select-none cursor-move${ring}`;
 
   const hasDocs = Boolean(node.props.docs);
@@ -908,10 +1169,14 @@ function NodeView({
       <div
         style={style}
         onPointerDown={onPointerDown}
-        className={`absolute cursor-move${ring}`}
+        className={`absolute cursor-move rounded-md${ring}`}
       >
-        {/* group outline */}
-        <div className="h-full w-full rounded-lg border-2 border-dashed border-violet-400 bg-violet-50/30 dark:bg-violet-950/20" />
+        {/* group outline (the selection ring replaces it while selected) */}
+        <div
+          className={`h-full w-full rounded-md border border-dashed ${
+            selected ? 'border-transparent' : 'border-group-outline'
+          }`}
+        />
 
         {/* children (positioned relative to group) */}
         {children.map((child) => (
@@ -924,18 +1189,17 @@ function NodeView({
           </div>
         ))}
 
-        {/* group label */}
-        <span className="absolute -top-5 left-0 text-[10px] font-medium text-violet-500">
-          ⊞ Group ({children.length})
-        </span>
-
-        {hasDocs && (
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-violet-500 text-[9px] text-white shadow">
-            📄
+        {/* group label, hidden below 50% zoom */}
+        {zoom >= 0.5 && (
+          <span className="pointer-events-none absolute bottom-full left-0 mb-1 flex items-center gap-1 whitespace-nowrap text-2xs font-medium text-text-muted">
+            <SelectionPlus size={12} aria-hidden="true" />
+            Group · {children.length}
           </span>
         )}
 
-        {selected && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
+        {hasDocs && <DocsBadge />}
+
+        {selected && editable && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
       </div>
     );
   }
@@ -944,29 +1208,26 @@ function NodeView({
   return (
     <div style={style} onPointerDown={onPointerDown} className={`${base} ${variantClass(node.type)}`}>
       <NodeInner node={node} />
-      {hasDocs && (
-        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-violet-500 text-[9px] text-white shadow">
-          📄
-        </span>
-      )}
-      {selected && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
+      {hasDocs && <DocsBadge />}
+      {selected && editable && <ResizeHandles nodeId={node.id} onResizeStart={onResizeStart} />}
     </div>
   );
 }
 
 // ── ResizeHandles ────────────────────────────────────────────────────
 
-const HANDLE_SIZE = 8;
+const HANDLE_HIT = 16; // transparent hit area around the 8px visible handle
+const HALF = HANDLE_HIT / 2;
 
 const HANDLES: { dir: HandleDir; cursor: string; style: CSSProperties }[] = [
-  { dir: 'nw', cursor: 'nwse-resize', style: { left: -HANDLE_SIZE / 2, top: -HANDLE_SIZE / 2 } },
-  { dir: 'n',  cursor: 'ns-resize',   style: { left: '50%', top: -HANDLE_SIZE / 2, transform: 'translateX(-50%)' } },
-  { dir: 'ne', cursor: 'nesw-resize', style: { right: -HANDLE_SIZE / 2, top: -HANDLE_SIZE / 2 } },
-  { dir: 'e',  cursor: 'ew-resize',   style: { right: -HANDLE_SIZE / 2, top: '50%', transform: 'translateY(-50%)' } },
-  { dir: 'se', cursor: 'nwse-resize', style: { right: -HANDLE_SIZE / 2, bottom: -HANDLE_SIZE / 2 } },
-  { dir: 's',  cursor: 'ns-resize',   style: { left: '50%', bottom: -HANDLE_SIZE / 2, transform: 'translateX(-50%)' } },
-  { dir: 'sw', cursor: 'nesw-resize', style: { left: -HANDLE_SIZE / 2, bottom: -HANDLE_SIZE / 2 } },
-  { dir: 'w',  cursor: 'ew-resize',   style: { left: -HANDLE_SIZE / 2, top: '50%', transform: 'translateY(-50%)' } },
+  { dir: 'nw', cursor: 'nwse-resize', style: { left: -HALF, top: -HALF } },
+  { dir: 'n',  cursor: 'ns-resize',   style: { left: '50%', top: -HALF, transform: 'translateX(-50%)' } },
+  { dir: 'ne', cursor: 'nesw-resize', style: { right: -HALF, top: -HALF } },
+  { dir: 'e',  cursor: 'ew-resize',   style: { right: -HALF, top: '50%', transform: 'translateY(-50%)' } },
+  { dir: 'se', cursor: 'nwse-resize', style: { right: -HALF, bottom: -HALF } },
+  { dir: 's',  cursor: 'ns-resize',   style: { left: '50%', bottom: -HALF, transform: 'translateX(-50%)' } },
+  { dir: 'sw', cursor: 'nesw-resize', style: { left: -HALF, bottom: -HALF } },
+  { dir: 'w',  cursor: 'ew-resize',   style: { left: -HALF, top: '50%', transform: 'translateY(-50%)' } },
 ];
 
 function ResizeHandles({
@@ -982,9 +1243,11 @@ function ResizeHandles({
         <div
           key={h.dir}
           onPointerDown={(e) => onResizeStart(e, nodeId, h.dir)}
-          style={{ ...h.style, width: HANDLE_SIZE, height: HANDLE_SIZE, cursor: h.cursor }}
-          className="absolute z-10 rounded-sm border border-violet-500 bg-white dark:bg-neutral-900"
-        />
+          style={{ ...h.style, width: HANDLE_HIT, height: HANDLE_HIT, cursor: h.cursor }}
+          className="absolute z-10 flex items-center justify-center"
+        >
+          <span className="pointer-events-none h-2 w-2 rounded-xs border-[1.5px] border-selection bg-handle-fill" />
+        </div>
       ))}
     </>
   );
@@ -992,57 +1255,59 @@ function ResizeHandles({
 
 // ── NodeInner: pure visual rendering ─────────────────────────────────
 
+// previews show the user's design, so they stay neutral like the export;
+// the accent is reserved for app chrome (selection, primary action, links)
 function NodeInner({ node }: { node: CanvasNode }) {
   switch (node.type) {
     case 'frame':
       return (
-        <div className="flex h-full w-full items-start justify-start rounded-md border-2 border-dashed border-neutral-400 p-1 text-xs text-neutral-400">
+        <div className="flex h-full w-full items-start justify-start rounded-md border-2 border-dashed border-border-strong p-1 text-xs text-text-subtle">
           {String(node.props.label ?? 'Frame')}
         </div>
       );
 
     case 'card':
       return (
-        <div className="flex h-full w-full items-start justify-start rounded-lg border border-neutral-200 bg-white p-2 text-xs text-neutral-600 shadow-sm dark:border-neutral-700 dark:bg-neutral-800">
+        <div className="flex h-full w-full items-start justify-start rounded-lg border border-border-strong bg-surface-raised p-2 text-xs text-text-muted">
           {String(node.props.label ?? 'Card')}
         </div>
       );
 
     case 'button':
       return (
-        <div className="flex h-full w-full items-center justify-center rounded-md bg-violet-600 text-sm font-medium text-white shadow">
+        <div className="flex h-full w-full items-center justify-center rounded-md bg-text text-sm font-medium text-bg">
           {String(node.props.label ?? 'Button')}
         </div>
       );
 
     case 'text':
       return (
-        <div className="flex h-full w-full items-center justify-start text-sm text-neutral-800 dark:text-neutral-100">
+        <div className="flex h-full w-full items-center justify-start text-sm text-text">
           {String(node.props.text ?? 'Text')}
         </div>
       );
 
     case 'input':
       return (
-        <div className="flex h-full w-full items-center rounded-md border border-neutral-300 bg-white px-2 text-sm text-neutral-400 dark:border-neutral-600 dark:bg-neutral-800">
+        <div className="flex h-full w-full items-center rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text-subtle">
           {String(node.props.placeholder ?? 'Enter text…')}
         </div>
       );
 
     case 'image':
       return (
-        <div className="flex h-full w-full flex-col items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-700 dark:bg-neutral-800">
-          <span className="text-2xl">🖼</span>
-          <span className="mt-1 text-[10px]">{String(node.props.alt ?? 'Image')}</span>
+        <div className="flex h-full w-full flex-col items-center justify-center rounded-md border border-border-strong bg-surface-hover text-text-subtle">
+          <ImageIcon size={24} aria-hidden="true" />
+          <span className="mt-1 text-2xs">{String(node.props.alt ?? 'Image')}</span>
         </div>
       );
 
     case 'divider':
-      return <div className="h-0.5 w-full rounded-full bg-neutral-300 dark:bg-neutral-600" />;
+      return <div className="h-0.5 w-full rounded-full bg-border-strong" />;
 
     case 'badge':
       return (
-        <div className="flex h-full w-full items-center justify-center rounded-full bg-violet-100 px-2 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+        <div className="flex h-full w-full items-center justify-center rounded-full bg-surface-active px-2 text-xs font-medium text-text-muted">
           {String(node.props.text ?? 'Badge')}
         </div>
       );
@@ -1052,7 +1317,7 @@ function NodeInner({ node }: { node: CanvasNode }) {
       return (
         <div
           className={`flex h-full w-full items-center rounded-full px-0.5 transition-colors ${
-            on ? 'bg-violet-500 justify-end' : 'bg-neutral-300 dark:bg-neutral-600 justify-start'
+            on ? 'bg-text justify-end' : 'bg-border-strong justify-start'
           }`}
         >
           <div className="h-[18px] w-[18px] rounded-full bg-white shadow-sm" />
@@ -1062,7 +1327,7 @@ function NodeInner({ node }: { node: CanvasNode }) {
 
     case 'box':
     default:
-      return <div className="h-full w-full rounded-md bg-neutral-300 dark:bg-neutral-700" />;
+      return <div className="h-full w-full rounded-md bg-border-strong/40" />;
   }
 }
 

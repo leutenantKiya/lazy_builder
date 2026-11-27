@@ -22,6 +22,9 @@ const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
+  // set by the OAuth callback when sign-in fails
+  validateSearch: (search: Record<string, unknown>): { error?: string } =>
+    typeof search.error === 'string' ? { error: search.error } : {},
   beforeLoad: async ({ context }) => {
     if (await context.queryClient.ensureQueryData(meQuery)) throw redirect({ to: '/' });
   },

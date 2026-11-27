@@ -4,15 +4,16 @@ import Suggestion, {
   type SuggestionKeyDownProps,
 } from '@tiptap/suggestion';
 import { ReactRenderer } from '@tiptap/react';
+import { TextHOne, TextHTwo, ListBullets, ListNumbers, CodeBlock } from '@phosphor-icons/react';
 import { SlashMenu, type CommandItem, type SlashMenuRef } from './SlashMenu';
 
 // command list: label + the block transform to apply
 const COMMANDS: CommandItem[] = [
-  { title: 'Heading 1', run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 1 }).run() },
-  { title: 'Heading 2', run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 2 }).run() },
-  { title: 'Bullet List', run: (e, r) => e.chain().focus().deleteRange(r).toggleBulletList().run() },
-  { title: 'Numbered List', run: (e, r) => e.chain().focus().deleteRange(r).toggleOrderedList().run() },
-  { title: 'Code Block', run: (e, r) => e.chain().focus().deleteRange(r).toggleCodeBlock().run() },
+  { title: 'Heading 1', icon: TextHOne, hint: '#', run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 1 }).run() },
+  { title: 'Heading 2', icon: TextHTwo, hint: '##', run: (e, r) => e.chain().focus().deleteRange(r).setNode('heading', { level: 2 }).run() },
+  { title: 'Bullet List', icon: ListBullets, hint: '-', run: (e, r) => e.chain().focus().deleteRange(r).toggleBulletList().run() },
+  { title: 'Numbered List', icon: ListNumbers, hint: '1.', run: (e, r) => e.chain().focus().deleteRange(r).toggleOrderedList().run() },
+  { title: 'Code Block', icon: CodeBlock, hint: '```', run: (e, r) => e.chain().focus().deleteRange(r).toggleCodeBlock().run() },
 ];
 
 export const SlashCommand = Extension.create({

@@ -21,13 +21,32 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
 export const memberRole = pgEnum("member_role", ["owner", "editor", "viewer"]);
 export const documentKind = pgEnum("document_kind", ["notion", "figma"]);
 
+export const oauthProvider = pgEnum("oauth_provider", ["google", "github"]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"),
-  passwordHash: text("password_hash").notNull(),
+  avatarUrl: text("avatar_url"),
+  // null for accounts that only sign in with a provider
+  passwordHash: text("password_hash"),
+  // set when a provider vouched for the email; password signups stay null
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const oauthAccounts = pgTable(
+  "oauth_accounts",
+  {
+    provider: oauthProvider("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.providerUserId] }), index("oauth_accounts_user_idx").on(t.userId)],
+);
 
 export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -82,6 +101,11 @@ export const documents = pgTable(
 
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(workspaceMembers),
+  oauthAccounts: many(oauthAccounts),
+}));
+
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
+  user: one(users, { fields: [oauthAccounts.userId], references: [users.id] }),
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -97,4 +121,5 @@ export const workspaceMembersRelations = relations(workspaceMembers, ({ one }) =
 
 export type User = typeof users.$inferSelect;
 export type Workspace = typeof workspaces.$inferSelect;
+export type OAuthProvider = (typeof oauthProvider.enumValues)[number];
 export type MemberRole = (typeof memberRole.enumValues)[number];

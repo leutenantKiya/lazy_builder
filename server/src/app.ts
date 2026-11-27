@@ -6,6 +6,7 @@ import { env } from "./config/env.ts";
 import { errorHandler } from "./middleware/errorHandler.ts";
 import authRoutes from "./routes/auth.routes.ts";
 import exportRoutes from "./routes/export.routes.ts";
+import oauthRoutes from "./routes/oauth.routes.ts";
 import workspaceRoutes from "./routes/workspace.routes.ts";
 
 const app = new Hono();
@@ -16,6 +17,7 @@ app.use("/api/*", cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
 
 app.get("/health", (c) => c.json({ ok: true }));
 app.route("/api/auth", authRoutes);
+app.route("/api/auth", oauthRoutes);
 app.route("/api/workspaces", workspaceRoutes);
 app.route("/api/export", exportRoutes);
 

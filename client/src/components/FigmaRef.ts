@@ -1,13 +1,28 @@
 import { Node, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 
-// clickable pill that lives inside the Notion editor and points to a canvas node.
+export type RefStatus = 'ok' | 'broken' | 'nocanvas';
+
+export const refStatusKey = new PluginKey('figmaRefStatus');
+
+const TITLES: Record<Exclude<RefStatus, 'ok'>, string> = {
+  broken: 'This canvas element was deleted',
+  nocanvas: 'This workspace has no canvas',
+};
+
+// clickable pill that lives inside the doc editor and points to a canvas node ("Canvas link").
 // this is the bridge between the two surfaces.
-export const FigmaRef = Node.create({
+export const FigmaRef = Node.create<{ getStatus: (nodeId: string) => RefStatus }>({
   name: 'figmaRef',
   group: 'inline',
   inline: true,
   atom: true,
   selectable: true,
+
+  addOptions() {
+    return { getStatus: () => 'ok' };
+  },
 
   addAttributes() {
     return {
@@ -21,15 +36,46 @@ export const FigmaRef = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
+    const label = node.attrs.label || 'Canvas link';
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
         'data-figma-ref': node.attrs.nodeId,
         'data-node-id': node.attrs.nodeId,
-        class:
-          'figma-ref inline-flex cursor-pointer items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 text-sm text-violet-700 no-underline hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:hover:bg-violet-900/60',
+        class: 'figma-ref',
+        role: 'link',
+        tabindex: '0',
+        'aria-label': `Canvas link: ${label}`,
       }),
-      `🎨 ${node.attrs.label || node.attrs.nodeId}`,
+      label,
+    ];
+  },
+
+  // broken / no-canvas state comes from the editor (it knows which nodes exist), shown as a
+  // decoration so the stored document stays untouched
+  addProseMirrorPlugins() {
+    const { getStatus } = this.options;
+    return [
+      new Plugin({
+        key: refStatusKey,
+        props: {
+          decorations: (state) => {
+            const decos: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (node.type.name !== this.name) return;
+              const status = getStatus(node.attrs.nodeId);
+              if (status === 'ok') return;
+              decos.push(
+                Decoration.node(pos, pos + node.nodeSize, {
+                  'data-state': status,
+                  title: TITLES[status],
+                })
+              );
+            });
+            return DecorationSet.create(state.doc, decos);
+          },
+        },
+      }),
     ];
   },
 });

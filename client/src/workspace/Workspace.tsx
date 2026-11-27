@@ -1,28 +1,55 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
+import {
+  Check,
+  CaretDown,
+  CircleNotch,
+  Copy,
+  DotsThree,
+  DownloadSimple,
+  Eye,
+  FileText,
+  Moon,
+  Plus,
+  Selection,
+  SidebarSimple,
+  SignOut,
+  SquareHalf,
+  Sun,
+  Warning,
+} from '@phosphor-icons/react';
 import Editor from '../components/Editor';
+import Monogram from '../components/Monogram';
 import Canvas from '../figma/Canvas';
+import { useTheme } from '../lib/theme';
 import type { WorkspaceSummary } from '../lib/api';
 import {
   exportTargetsQuery,
   meQuery,
   useCreateWorkspace,
   useDeleteWorkspace,
+  useExportWorkspace,
   useJoinWorkspace,
   useLogout,
   useUpdateWorkspace,
   workspaceQuery,
   workspacesQuery,
 } from '../lib/queries';
+import ConfirmDialog from './ConfirmDialog';
+import EmptyIllustration from './EmptyIllustration';
+import { Toasts, type ToastData } from './Toasts';
+import { btnDangerGhost, btnGhost, btnIcon, btnPrimary, btnSecondary, inputCls } from './ui';
 
 type Surface = 'notion' | 'figma';
+
+const isNarrow = () => !window.matchMedia('(min-width: 768px)').matches;
 
 // workspaces live on the server now; the active one comes from the URL (/w/:id)
 export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   const navigate = useNavigate();
-  const { data: workspaces = [], isSuccess } = useQuery(workspacesQuery);
+  const { data: workspaces = [], isSuccess, isError, refetch } = useQuery(workspacesQuery);
   const { data: me } = useQuery(meQuery);
   const active = workspaces.find((w) => w.id === workspaceId);
 
@@ -33,38 +60,51 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   const deleteWs = useDeleteWorkspace();
   const joinWs = useJoinWorkspace();
   const logout = useLogout();
+  const exportWs = useExportWorkspace();
 
   const [surface, setSurface] = useState<Surface>('notion');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isNarrow());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [editingWsId, setEditingWsId] = useState<string | null>(null);
   const [editWsName, setEditWsName] = useState('');
   const [inviteInput, setInviteInput] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exported, setExported] = useState(false);
+  const [exportTick, setExportTick] = useState(0);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const joinRef = useRef<HTMLInputElement>(null);
+  const toastId = useRef(0);
 
-  const [dark, setDark] = useState(
-    () =>
-      localStorage.theme === 'dark' ||
-      (!('theme' in localStorage) &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches)
-  );
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.theme = dark ? 'dark' : 'light';
-  }, [dark]);
+  const [dark, toggleTheme] = useTheme();
+
+  const pushToast = useCallback((t: Omit<ToastData, 'id'>) => {
+    setToasts((all) => [...all, { ...t, id: ++toastId.current }]);
+  }, []);
+  const dismissToast = useCallback((id: number) => setToasts((all) => all.filter((t) => t.id !== id)), []);
 
   // unknown id (deleted, removed from it, typo) -> back to the index
   useEffect(() => {
     if (workspaceId && isSuccess && !active) navigate({ to: '/', replace: true });
   }, [workspaceId, isSuccess, active, navigate]);
 
-  // kick back to Notion if workspace has no Figma board
+  // kick back to the doc if the workspace has no canvas
   useEffect(() => {
     if (surface === 'figma' && active && !active.hasCanvas) setSurface('notion');
   }, [surface, active]);
 
+  // the "Downloaded" state lasts 2s
+  useEffect(() => {
+    if (!exported) return;
+    const t = setTimeout(() => setExported(false), 2000);
+    return () => clearTimeout(t);
+  }, [exported]);
+
   const readOnly = active?.role === 'viewer';
 
-  const openWorkspace = (id: string) => navigate({ to: '/w/$workspaceId', params: { workspaceId: id } });
+  const openWorkspace = (id: string) => {
+    if (isNarrow()) setSidebarOpen(false);
+    navigate({ to: '/w/$workspaceId', params: { workspaceId: id } });
+  };
 
   const createWorkspace = () => {
     createWs.mutate(
@@ -73,8 +113,8 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
     );
   };
 
-  // bolt on a Figma board to this workspace
-  const addFigma = () => {
+  // bolt a canvas on to this workspace
+  const addCanvas = () => {
     if (!active) return;
     updateWs.mutate({ id: active.id, hasCanvas: true }, { onSuccess: () => setSurface('figma') });
   };
@@ -100,8 +140,17 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
   };
 
   const removeWorkspace = () => {
-    if (!active || !confirm(`Delete "${active.name}" and its documents? This can't be undone.`)) return;
-    deleteWs.mutate(active.id, { onSuccess: () => navigate({ to: '/', replace: true }) });
+    if (!active) return;
+    deleteWs.mutate(active.id, {
+      onSuccess: () => {
+        setConfirmDelete(false);
+        navigate({ to: '/', replace: true });
+      },
+      onError: (e) => {
+        setConfirmDelete(false);
+        pushToast({ kind: 'error', title: `Couldn't delete ${active.name}`, body: e.message });
+      },
+    });
   };
 
   const join = (e: FormEvent) => {
@@ -116,221 +165,359 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
     });
   };
 
+  const focusJoin = () => {
+    setSidebarOpen(true);
+    // wait a frame so the (possibly collapsed) sidebar is interactive
+    setTimeout(() => joinRef.current?.focus(), 0);
+  };
+
+  const target = active ? targets.find((t) => t.id === active.exportTarget) : undefined;
+  const exportEnabled = !!active?.hasCanvas && !!target?.ready;
+  const exportReason = !active
+    ? ''
+    : !active.hasCanvas
+      ? 'Add a canvas first'
+      : !target?.ready
+        ? `${target?.label ?? 'This target'} export is coming soon`
+        : '';
+
+  const runExport = () => {
+    if (!active || !exportEnabled || exportWs.isPending) return;
+    exportWs.mutate(active.id, {
+      onSuccess: ({ blob, filename }) => {
+        // blob -> object URL -> click, so we know the file arrived
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        setExported(true);
+        setExportTick((n) => n + 1);
+        pushToast({
+          kind: 'success',
+          title: `${filename} downloaded`,
+          body: `${target?.label ?? 'Project'} project. Unzip, then `,
+          code: 'npm install && npm run dev',
+        });
+      },
+      onError: (e) =>
+        pushToast({
+          kind: 'error',
+          title: `Export failed: ${e.message}`,
+          action: { label: 'Try again', run: runExport },
+        }),
+    });
+  };
+
+  const copyInvite = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const onSidebarKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isNarrow()) setSidebarOpen(false);
+  };
+
+  // phones: the sidebar is a modal drawer. Move focus into it on open, close it
+  // on Escape from anywhere, and hand focus back to the opener on close.
+  const asideRef = useRef<HTMLElement>(null);
+  const showSidebarRef = useRef<HTMLButtonElement>(null);
+  const drawerWasOpen = useRef(false);
+  useEffect(() => {
+    if (!isNarrow()) return;
+    if (sidebarOpen) {
+      drawerWasOpen.current = true;
+      // after the width transition starts, so the element is focusable
+      const t = setTimeout(() => {
+        if (!asideRef.current?.contains(document.activeElement)) asideRef.current?.querySelector<HTMLElement>('button, input')?.focus();
+      }, 0);
+      const onKey = (e: globalThis.KeyboardEvent) => {
+        if (e.key === 'Escape') setSidebarOpen(false);
+      };
+      document.addEventListener('keydown', onKey);
+      return () => {
+        clearTimeout(t);
+        document.removeEventListener('keydown', onKey);
+      };
+    }
+    if (drawerWasOpen.current) {
+      drawerWasOpen.current = false;
+      setTimeout(() => showSidebarRef.current?.focus(), 0);
+    }
+  }, [sidebarOpen]);
+  const drawerOpen = sidebarOpen && isNarrow();
+
+  const deleteButton = (
+    <button onClick={() => setConfirmDelete(true)} className={btnDangerGhost}>
+      Delete
+    </button>
+  );
+
   return (
-    <div className="relative flex h-screen bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
-      {sidebarOpen ? (
-        <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 p-4 dark:border-neutral-800">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Lazy Builder
-            </h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              title="Hide sidebar"
-              className="rounded px-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            >
-              «
+    <div className="relative flex h-dvh overflow-hidden bg-bg text-text">
+      {/* scrim behind the sidebar drawer on phones */}
+      {sidebarOpen && (
+        <div
+          aria-hidden="true"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+        />
+      )}
+
+      <div
+        onKeyDown={onSidebarKey}
+        style={{ width: sidebarOpen ? 248 : 0 }}
+        className="z-30 shrink-0 overflow-hidden transition-[width] duration-slow ease-in-out max-md:fixed max-md:inset-y-0 max-md:left-0"
+      >
+        <aside
+          ref={asideRef}
+          inert={!sidebarOpen}
+          aria-label="Workspaces"
+          aria-modal={drawerOpen || undefined}
+          role={drawerOpen ? 'dialog' : undefined}
+          className="flex h-full w-[248px] flex-col border-r border-border bg-surface p-3"
+        >
+          <div className="mb-4 flex h-8 items-center justify-between">
+            <div className="flex items-center gap-2 pl-1">
+              <Monogram />
+              <span className="text-sm font-semibold">Lazy Builder</span>
+            </div>
+            <button onClick={() => setSidebarOpen(false)} aria-label="Hide sidebar" className={btnIcon}>
+              <SidebarSimple size={16} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Workspaces
-            </span>
+          <div className="mb-1 flex items-center justify-between pl-2.5">
+            <h2 className="text-xs font-medium text-text-muted">Workspaces</h2>
             <button
               onClick={createWorkspace}
-              title="New workspace"
-              className="rounded px-1.5 text-lg leading-none text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              disabled={createWs.isPending}
+              aria-label="New workspace"
+              className={`${btnIcon} !h-6 !w-6`}
             >
-              +
+              <Plus size={14} aria-hidden="true" />
             </button>
           </div>
 
-          <ul className="space-y-0.5">
-            {workspaces.map((w) => (
-              <li key={w.id}>
-                <button
-                  onClick={() => openWorkspace(w.id)}
-                  onDoubleClick={() => startRenameWs(w)}
-                  className={`flex w-full items-center justify-between gap-2 truncate rounded-md px-3 py-1.5 text-left text-sm ${
-                    w.id === workspaceId
-                      ? 'bg-neutral-200 font-medium dark:bg-neutral-700'
-                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  }`}
-                >
+          <ul className="-mx-0 min-h-0 space-y-0.5 overflow-y-auto">
+            {workspaces.map((w) => {
+              const isActive = w.id === workspaceId;
+              return (
+                <li key={w.id} className="relative">
+                  {isActive && (
+                    <span aria-hidden="true" className="absolute left-0.5 top-2 h-4 w-0.5 rounded-full bg-accent" />
+                  )}
                   {editingWsId === w.id ? (
                     <input
                       autoFocus
+                      aria-label={`Rename ${w.name}`}
                       value={editWsName}
                       onChange={(e) => setEditWsName(e.target.value)}
                       onBlur={commitRenameWs}
-                      onKeyDown={(e) => { if (e.key === 'Enter') commitRenameWs(); if (e.key === 'Escape') setEditingWsId(null); }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex-1 rounded border border-violet-400 bg-white px-1 py-0 text-sm outline-none dark:bg-neutral-800"
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') commitRenameWs();
+                        if (e.key === 'Escape') setEditingWsId(null);
+                      }}
+                      className={`${inputCls} !h-8 w-full !text-sm`}
                     />
                   ) : (
-                    <span className="truncate">{w.name}</span>
+                    <button
+                      onClick={() => openWorkspace(w.id)}
+                      onDoubleClick={() => startRenameWs(w)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'F2') startRenameWs(w);
+                      }}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex h-8 w-full items-center justify-between gap-2 rounded-md px-2.5 text-left text-sm text-text transition-colors duration-fast ${
+                        isActive ? 'bg-surface-active font-medium' : 'hover:bg-surface-hover'
+                      }`}
+                    >
+                      <span className="truncate">{w.name}</span>
+                      {w.hasCanvas && (
+                        <SquareHalf
+                          size={14}
+                          role="img"
+                          aria-label="Has a canvas"
+                          className="shrink-0 text-text-subtle"
+                        />
+                      )}
+                    </button>
                   )}
-                  {w.hasCanvas && <span title="has Figma board">🎨</span>}
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
 
-          <form onSubmit={join} className="mt-4 space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Join with code</span>
-            <div className="flex gap-1">
+          <form onSubmit={join} className="mt-5">
+            <label htmlFor="join-code" className="mb-1.5 block text-xs font-medium text-text-muted">
+              Join with code
+            </label>
+            <div className="flex gap-1.5">
               <input
+                id="join-code"
+                ref={joinRef}
                 value={inviteInput}
                 onChange={(e) => setInviteInput(e.target.value)}
                 placeholder="Invite code"
-                className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm outline-none focus:border-violet-500 dark:border-neutral-700"
+                autoComplete="off"
+                aria-invalid={joinWs.error ? true : undefined}
+                aria-describedby={joinWs.error ? 'join-error' : undefined}
+                className={`${inputCls} flex-1 ${joinWs.error ? '!border-danger !bg-danger-subtle' : ''}`}
               />
-              <button
-                type="submit"
-                disabled={joinWs.isPending}
-                className="rounded-md border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-              >
-                Join
+              <button type="submit" disabled={joinWs.isPending} aria-busy={joinWs.isPending} className={btnSecondary}>
+                {joinWs.isPending ? 'Joining…' : 'Join'}
               </button>
             </div>
-            {joinWs.error && <p className="text-xs text-red-600 dark:text-red-400">{joinWs.error.message}</p>}
+            {joinWs.error && (
+              <p id="join-error" className="mt-1.5 flex items-start gap-1 text-xs text-danger">
+                <Warning size={14} className="mt-px shrink-0" aria-hidden="true" />
+                {joinWs.error.message}
+              </p>
+            )}
           </form>
 
-          <div className="mt-auto space-y-2">
-            <p className="truncate text-xs text-neutral-500" title={me?.email}>
+          <div className="mt-auto border-t border-border pt-3">
+            <p className="mb-2 truncate pl-1 text-xs text-text-muted" title={me?.email}>
               {me?.name ?? me?.email}
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDark((v) => !v)}
-                className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
-              >
-                {dark ? '☀️ Light' : '🌙 Dark'}
-              </button>
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => logout.mutate(undefined, { onSuccess: () => navigate({ to: '/login' }) })}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700"
+                className={btnGhost}
               >
+                <SignOut size={16} aria-hidden="true" />
                 Log out
+              </button>
+              <button
+                onClick={toggleTheme}
+                aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
+                className={btnIcon}
+              >
+                {dark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
               </button>
             </div>
           </div>
         </aside>
-      ) : (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          title="Show sidebar"
-          className="absolute left-3 top-3 z-20 rounded-md border border-neutral-300 bg-white/80 px-2 py-1 text-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/80"
-        >
-          ☰
-        </button>
-      )}
+      </div>
 
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* surface tabs for the active workspace */}
-        <div className={`flex items-center gap-1 border-b border-neutral-200 py-2 pr-4 dark:border-neutral-800 ${sidebarOpen ? 'pl-4' : 'pl-12'}`}>
-          {active && (
-            <Tab active={surface === 'notion'} onClick={() => setSurface('notion')}>
-              📝 Notion
-            </Tab>
-          )}
-          {!active ? null : active.hasCanvas ? (
-            <Tab active={surface === 'figma'} onClick={() => setSurface('figma')}>
-              🎨 Figma
-            </Tab>
-          ) : readOnly ? null : (
-            <button
-              onClick={addFigma}
-              className="rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-            >
-              ＋ Add Figma page
+      {/* inert while the phone drawer is open so Tab can't reach the page behind it */}
+      <main inert={drawerOpen} className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-bg px-4 py-2">
+          {!sidebarOpen && (
+            <button ref={showSidebarRef} onClick={() => setSidebarOpen(true)} aria-label="Show sidebar" className={btnIcon}>
+              <SidebarSimple size={16} aria-hidden="true" />
             </button>
           )}
-          <span className="ml-2 truncate text-sm text-neutral-400">
-            {active?.name}
-            {readOnly && ' (view only)'}
-          </span>
 
           {active && (
-            <div className="ml-auto flex items-center gap-2">
-              {/* which stack the canvas exports to; generators ship later */}
-              <label className="flex items-center gap-1 text-sm text-neutral-500">
-                Export to
-                <select
-                  value={active.exportTarget}
-                  disabled={readOnly || updateWs.isPending}
-                  onChange={(e) => updateWs.mutate({ id: active.id, exportTarget: e.target.value })}
-                  className="rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
-                >
-                  {targets.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                      {t.ready ? '' : ' (soon)'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {(() => {
-                const target = targets.find((t) => t.id === active.exportTarget);
-                const why = !active.hasCanvas
-                  ? 'Add a Figma page first'
-                  : !target?.ready
-                    ? `${target?.label ?? 'This target'} export is coming soon`
-                    : `Download a ${target.label} project`;
-                const enabled = active.hasCanvas && !!target?.ready;
-                // plain link: same-origin, so the auth cookie rides along and the browser saves the zip
-                return (
-                  <a
-                    href={enabled ? `/api/workspaces/${active.id}/export` : undefined}
-                    download
-                    aria-disabled={!enabled}
-                    title={why}
-                    className={`rounded-md px-3 py-1 text-sm font-medium ${
-                      enabled
-                        ? 'bg-violet-600 text-white hover:bg-violet-700'
-                        : 'cursor-not-allowed bg-neutral-200 text-neutral-400 dark:bg-neutral-800'
-                    }`}
-                  >
-                    Export
-                  </a>
-                );
-              })()}
-              {detail?.workspace.inviteCode && (
-                <button
-                  onClick={() => navigator.clipboard?.writeText(detail.workspace.inviteCode!)}
-                  title="Copy invite code"
-                  className="rounded-md border border-neutral-300 px-2 py-1 font-mono text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
-                >
-                  invite: {detail.workspace.inviteCode}
+            <>
+              <Tabs
+                surface={surface}
+                setSurface={setSurface}
+                hasCanvas={active.hasCanvas}
+              />
+              {!active.hasCanvas && !readOnly && (
+                <button onClick={addCanvas} disabled={updateWs.isPending} className={btnSecondary}>
+                  <Plus size={16} aria-hidden="true" />
+                  Add canvas
                 </button>
               )}
-              {active.role === 'owner' && (
-                <button
-                  onClick={removeWorkspace}
-                  className="rounded-md px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  Delete
-                </button>
+              <span className="hidden min-w-0 truncate text-sm text-text-muted lg:inline">{active.name}</span>
+              {readOnly && (
+                <span className="inline-flex items-center gap-1 text-sm text-warning">
+                  <Eye size={16} aria-hidden="true" />
+                  View only
+                </span>
               )}
-            </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                {/* which stack the canvas exports to */}
+                <label className="flex items-center gap-2 text-sm text-text-muted">
+                  <span className="max-lg:sr-only">Export to</span>
+                  <span className="relative">
+                    <select
+                      value={active.exportTarget}
+                      disabled={readOnly || updateWs.isPending}
+                      onChange={(e) => updateWs.mutate({ id: active.id, exportTarget: e.target.value })}
+                      className={`${inputCls} appearance-none !text-sm pr-8 [&>option]:bg-surface-raised`}
+                    >
+                      {targets.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                          {t.ready ? '' : ' (soon)'}
+                        </option>
+                      ))}
+                    </select>
+                    <CaretDown
+                      size={16}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute right-2 top-2 text-text-muted"
+                    />
+                  </span>
+                </label>
+
+                <ExportButton
+                  enabled={exportEnabled}
+                  reason={exportReason}
+                  pending={exportWs.isPending}
+                  done={exported}
+                  onClick={runExport}
+                  title={target ? `Download a ${target.label} project` : undefined}
+                />
+
+                <div className="hidden items-center gap-2 min-[900px]:flex">
+                  {detail?.workspace.inviteCode && (
+                    <InviteChip code={detail.workspace.inviteCode} copy={copyInvite} />
+                  )}
+                  {active.role === 'owner' && deleteButton}
+                </div>
+                {(detail?.workspace.inviteCode || active.role === 'owner') && (
+                  <MoreMenu>
+                    {detail?.workspace.inviteCode && (
+                      <InviteChip code={detail.workspace.inviteCode} copy={copyInvite} menu />
+                    )}
+                    {active.role === 'owner' && (
+                      <button
+                        role="menuitem"
+                        data-close
+                        onClick={() => setConfirmDelete(true)}
+                        className="flex h-8 w-full items-center rounded-md px-2.5 text-left text-sm text-danger hover:bg-danger-subtle"
+                      >
+                        Delete workspace
+                      </button>
+                    )}
+                  </MoreMenu>
+                )}
+              </div>
+            </>
           )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {!active ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-500">
-              <p>No workspaces yet.</p>
-              <button
-                onClick={createWorkspace}
-                className="rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
-              >
-                Create one
-              </button>
-            </div>
+            <EmptyState
+              error={isError}
+              retry={() => refetch()}
+              onCreate={createWorkspace}
+              creating={createWs.isPending}
+              onJoin={focusJoin}
+            />
           ) : surface === 'notion' ? (
-            <div className="h-full overflow-auto p-8">
-              <div className="mx-auto max-w-3xl">
+            <div
+              role="tabpanel"
+              id="panel-notion"
+              aria-labelledby="tab-notion"
+              className="doc-page h-full overflow-auto px-4 py-8 sm:px-8 sm:py-12"
+            >
+              <div className="mx-auto max-w-[70ch]">
                 <Editor
                   key={`${active.id}:notion`}
                   docId={`${active.id}:notion`}
@@ -341,38 +528,286 @@ export default function Workspace({ workspaceId }: { workspaceId?: string }) {
               </div>
             </div>
           ) : (
-            <Canvas
-              key={`${active.id}:figma`}
-              boardId={`${active.id}:figma`}
-              selectedNodeId={selectedNodeId}
-              onNodeSelect={setSelectedNodeId}
-            />
+            <div role="tabpanel" id="panel-figma" aria-labelledby="tab-figma" className="h-full">
+              <Canvas
+                key={`${active.id}:figma`}
+                boardId={`${active.id}:figma`}
+                selectedNodeId={selectedNodeId}
+                onNodeSelect={setSelectedNodeId}
+                exportTick={exportTick}
+                readOnly={readOnly}
+              />
+            </div>
           )}
         </div>
       </main>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete ${active?.name ?? 'workspace'}?`}
+        confirmLabel={deleteWs.isPending ? 'Deleting…' : 'Delete workspace'}
+        busy={deleteWs.isPending}
+        onConfirm={removeWorkspace}
+        onClose={() => setConfirmDelete(false)}
+      >
+        This deletes the doc and canvas for everyone in this workspace. It can't be undone.
+      </ConfirmDialog>
+
+      <Toasts toasts={toasts} dismiss={dismissToast} />
     </div>
   );
 }
 
-function Tab({
-  active,
-  onClick,
-  children,
+// segmented control: Doc / Canvas (system.md 6.4), arrow keys move between tabs
+function Tabs({
+  surface,
+  setSurface,
+  hasCanvas,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
+  surface: Surface;
+  setSurface: (s: Surface) => void;
+  hasCanvas: boolean;
 }) {
-  return (
+  const order: Surface[] = hasCanvas ? ['notion', 'figma'] : ['notion'];
+  const onKey = (e: KeyboardEvent) => {
+    const i = order.indexOf(surface);
+    let next = i;
+    if (e.key === 'ArrowRight') next = (i + 1) % order.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + order.length) % order.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = order.length - 1;
+    else return;
+    e.preventDefault();
+    setSurface(order[next]);
+    document.getElementById(`tab-${order[next]}`)?.focus();
+  };
+  const tab = (id: Surface, label: string, icon: ReactNode) => (
     <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm ${
-        active
-          ? 'bg-neutral-200 font-medium dark:bg-neutral-700'
-          : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+      role="tab"
+      id={`tab-${id}`}
+      aria-selected={surface === id}
+      aria-controls={`panel-${id}`}
+      tabIndex={surface === id ? 0 : -1}
+      onClick={() => setSurface(id)}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-sm transition-colors duration-fast ${
+        surface === id ? 'bg-surface-active font-medium text-text' : 'text-text-muted hover:text-text'
       }`}
     >
-      {children}
+      {icon}
+      {label}
     </button>
+  );
+  return (
+    <div role="tablist" aria-label="Workspace surface" onKeyDown={onKey} className="flex gap-0.5 rounded-md bg-surface p-0.5">
+      {tab('notion', 'Doc', <FileText size={14} aria-hidden="true" />)}
+      {hasCanvas && tab('figma', 'Canvas', <Selection size={14} aria-hidden="true" />)}
+    </div>
+  );
+}
+
+function ExportButton({
+  enabled,
+  reason,
+  pending,
+  done,
+  onClick,
+  title,
+}: {
+  enabled: boolean;
+  reason: string;
+  pending: boolean;
+  done: boolean;
+  onClick: () => void;
+  title?: string;
+}) {
+  const label = pending ? 'Preparing…' : done ? 'Downloaded' : 'Export';
+  const icon = pending ? (
+    <CircleNotch size={14} className="animate-spin" aria-hidden="true" />
+  ) : done ? (
+    <Check size={16} aria-hidden="true" />
+  ) : (
+    <DownloadSimple size={16} aria-hidden="true" />
+  );
+  const button = (
+    <button
+      onClick={onClick}
+      disabled={!enabled}
+      aria-busy={pending}
+      aria-describedby={!enabled ? 'export-reason' : undefined}
+      title={enabled ? title : undefined}
+      className={`${btnPrimary} min-w-[112px]`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+  if (enabled) return button;
+  // a disabled button can't take focus, so the wrapper carries the tooltip for keyboard users
+  return (
+    <span tabIndex={0} className="group relative inline-flex rounded-md">
+      {button}
+      <span
+        id="export-reason"
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-40 mt-1.5 whitespace-nowrap rounded-sm bg-hud-bg px-2 py-1 text-xs font-medium text-hud-text opacity-0 transition-opacity duration-fast group-focus-visible:opacity-100 group-focus-visible:delay-500 group-hover:opacity-100 group-hover:delay-500"
+      >
+        {reason}
+      </span>
+    </span>
+  );
+}
+
+function InviteChip({
+  code,
+  copy,
+  menu,
+}: {
+  code: string;
+  copy: (code: string) => Promise<boolean>;
+  menu?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <>
+      <button
+        role={menu ? 'menuitem' : undefined}
+        onClick={async () => setCopied(await copy(code))}
+        aria-label="Copy invite code"
+        className={
+          menu
+            ? 'flex h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left text-sm text-text hover:bg-surface-hover'
+            : `${btnSecondary} font-mono !text-xs !font-normal`
+        }
+      >
+        {menu ? (
+          <span className="flex items-baseline gap-2">
+            <span className="text-xs text-text-muted">Invite code</span>
+            <span className="font-mono text-xs">{code}</span>
+          </span>
+        ) : (
+          <span className="font-mono text-xs">{code}</span>
+        )}
+        {copied ? (
+          <span className="inline-flex items-center gap-1 font-sans text-xs text-success">
+            <Check size={14} aria-hidden="true" />
+            Copied
+          </span>
+        ) : (
+          <Copy size={14} aria-hidden="true" />
+        )}
+      </button>
+      <span role="status" aria-live="polite" className="sr-only">
+        {copied ? 'Invite code copied' : ''}
+      </span>
+    </>
+  );
+}
+
+// below 900px the invite chip and Delete live here
+function MoreMenu({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="relative min-[900px]:hidden"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          e.stopPropagation();
+          setOpen(false);
+          btnRef.current?.focus();
+        }
+      }}
+    >
+      <button
+        ref={btnRef}
+        onClick={() => setOpen((o) => !o)}
+        aria-label="More"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={btnIcon}
+      >
+        <DotsThree size={16} weight="bold" aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          onClick={(e) => {
+            // actions that open a dialog close the menu; park focus on the trigger so the dialog returns here
+            if (!(e.target as HTMLElement).closest('[data-close]')) return;
+            setOpen(false);
+            btnRef.current?.focus();
+          }}
+          className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-lg border border-border bg-surface-raised p-1 shadow-float animate-[lb-rise_var(--duration-base)_var(--ease-out)_both]"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({
+  error,
+  retry,
+  onCreate,
+  creating,
+  onJoin,
+}: {
+  error: boolean;
+  retry: () => void;
+  onCreate: () => void;
+  creating: boolean;
+  onJoin: () => void;
+}) {
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <div className="max-w-[420px]">
+          <h1 className="text-lg font-semibold">Couldn't load your workspaces.</h1>
+          <button onClick={retry} className={`${btnSecondary} mt-4`}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full items-center justify-center overflow-auto p-4">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-6 text-border-strong">
+          <EmptyIllustration />
+        </div>
+        <h1 className="text-lg font-semibold">Start your first workspace</h1>
+        <p className="mt-2 text-sm text-text-muted">
+          A workspace holds one doc and, when you add it, one canvas. Invite people with its code.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <button onClick={onCreate} disabled={creating} aria-busy={creating} className={btnPrimary}>
+            {creating && <CircleNotch size={14} className="animate-spin" aria-hidden="true" />}
+            Create workspace
+          </button>
+          <button onClick={onJoin} className={btnSecondary}>
+            Join with a code
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

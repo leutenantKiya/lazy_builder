@@ -1,0 +1,270 @@
+/* Lazy Builder design tokens (Tailwind 4).
+ * Source of truth: .agents/team/design/system.md. Names here match it one to one.
+ *
+ * Paste below `@import "tailwindcss";` in client/src/index.css.
+ * Theme switch stays class-based (`<html class="dark">`), matching the existing
+ * `@custom-variant dark`. Dark is the primary theme: default to it when no
+ * preference is stored (see system.md, "Theme default").
+ *
+ * Usage: bg-bg, bg-surface, bg-surface-raised, bg-canvas, text-text, text-text-muted,
+ * border-border, border-border-strong, bg-accent text-accent-fg, text-accent-text,
+ * ring-focus, border-selection, bg-guide, text-danger, font-sans, font-mono, etc.
+ *
+ * Fonts (self-hosted, OFL):
+ *   npm i @fontsource-variable/ibm-plex-sans @fontsource/ibm-plex-mono
+ *   then in main.tsx:
+ *   import '@fontsource-variable/ibm-plex-sans';
+ *   import '@fontsource/ibm-plex-mono/400.css';
+ *   import '@fontsource/ibm-plex-mono/500.css';
+ */
+
+/* ── Light values (also the fallback before the theme class is set) ── */
+/* Palette A "Workshop": neutral graphite on warm paper, safety-orange accent.
+ * Orange marks what's live (primary action, selection, links, focus); errors
+ * use a pink-leaning crimson and warnings use yellow so neither reads as accent. */
+:root {
+  --lb-bg: #f5f4f1;
+  --lb-surface: #ffffff;
+  --lb-surface-raised: #ffffff;
+  --lb-surface-hover: #efeeea;
+  --lb-surface-active: #e8e6e1;
+  --lb-canvas: #eceae6;
+
+  --lb-border: #e1dfda;          /* decorative separators only */
+  --lb-border-strong: #7c7973;   /* control boundaries: inputs, secondary buttons (>= 3:1) */
+
+  --lb-text: #171615;
+  --lb-text-muted: #55524d;
+  --lb-text-subtle: #67645e;     /* captions, shortcuts; >= 4.5:1 on bg/surface/canvas */
+  --lb-text-disabled: #9a968f;   /* disabled only (exempt from 4.5:1) */
+
+  --lb-accent: #c2410c;          /* primary button fill, active marks */
+  --lb-accent-hover: #a8380a;
+  --lb-accent-pressed: #8f2f08;
+  --lb-accent-fg: #ffffff;
+  --lb-accent-text: #b23a0b;     /* orange text/links on surfaces */
+  --lb-accent-subtle: #fdede5;   /* pill background */
+  --lb-accent-subtle-text: #9a3209;
+  --lb-accent-subtle-hover: #fbddcc;
+
+  --lb-focus: #c2410c;
+
+  --lb-success: #117a3a;
+  --lb-success-subtle: #e6f6ec;
+  --lb-warning: #8a5a00;
+  --lb-warning-subtle: #fbf3dc;
+  --lb-danger: #c8203a;
+  --lb-danger-fill: #c8203a;
+  --lb-danger-fg: #ffffff;
+  --lb-danger-subtle: #fdecef;
+
+  /* canvas chrome */
+  --lb-selection: #c2410c;
+  --lb-selection-halo: rgb(194 65 12 / 0.18);
+  --lb-guide: #0369a1;
+  --lb-group-outline: #8f6450;
+  --lb-marquee: #c2410c;
+  --lb-marquee-fill: rgb(194 65 12 / 0.08);
+  --lb-handle-fill: #ffffff;
+  --lb-hud-bg: #171615;
+  --lb-hud-text: #ffffff;
+
+  --lb-shadow-float: 0 1px 2px rgb(23 22 21 / 0.08), 0 8px 24px rgb(23 22 21 / 0.12);
+  --lb-shadow-dialog: 0 2px 4px rgb(23 22 21 / 0.08), 0 24px 48px rgb(23 22 21 / 0.18);
+
+  color-scheme: light;
+}
+
+/* ── Dark values (primary theme) ── */
+:root.dark {
+  --lb-bg: #121212;
+  --lb-surface: #181818;
+  --lb-surface-raised: #202020;
+  --lb-surface-hover: #222222;
+  --lb-surface-active: #282828;
+  --lb-canvas: #0e0e0e;
+
+  --lb-border: #2a2a2a;
+  --lb-border-strong: #6e6e6e;
+
+  --lb-text: #ededed;
+  --lb-text-muted: #a3a3a3;
+  --lb-text-subtle: #8e8e8e;
+  --lb-text-disabled: #666666;
+
+  --lb-accent: #ff5a1f;
+  --lb-accent-hover: #ff6e3a;
+  --lb-accent-pressed: #e84e14;
+  --lb-accent-fg: #121212;
+  --lb-accent-text: #ff8a5c;
+  --lb-accent-subtle: #3a1e12;
+  --lb-accent-subtle-text: #ffb596;
+  --lb-accent-subtle-hover: #46251a;
+
+  --lb-focus: #ff8a5c;
+
+  --lb-success: #3dd68c;
+  --lb-success-subtle: #10221a;
+  --lb-warning: #e8b931;
+  --lb-warning-subtle: #2a230c;
+  --lb-danger: #ff6b81;
+  --lb-danger-fill: #d02e4a;
+  --lb-danger-fg: #ffffff;
+  --lb-danger-subtle: #2d1318;
+
+  --lb-selection: #ff6b33;
+  --lb-selection-halo: rgb(255 107 51 / 0.22);
+  --lb-guide: #4db8ff;
+  --lb-group-outline: #a8826e;
+  --lb-marquee: #ff6b33;
+  --lb-marquee-fill: rgb(255 107 51 / 0.10);
+  --lb-handle-fill: #0e0e0e;
+  --lb-hud-bg: #202020;
+  --lb-hud-text: #ededed;
+
+  --lb-shadow-float: 0 0 0 1px rgb(0 0 0 / 0.2), 0 8px 24px rgb(0 0 0 / 0.45);
+  --lb-shadow-dialog: 0 0 0 1px rgb(0 0 0 / 0.2), 0 24px 48px rgb(0 0 0 / 0.55);
+
+  color-scheme: dark;
+}
+
+/* ── Tailwind theme: utilities read the variables, so `dark:` pairs are no longer needed ── */
+@theme inline {
+  --color-bg: var(--lb-bg);
+  --color-surface: var(--lb-surface);
+  --color-surface-raised: var(--lb-surface-raised);
+  --color-surface-hover: var(--lb-surface-hover);
+  --color-surface-active: var(--lb-surface-active);
+  --color-canvas: var(--lb-canvas);
+
+  --color-border: var(--lb-border);
+  --color-border-strong: var(--lb-border-strong);
+
+  --color-text: var(--lb-text);
+  --color-text-muted: var(--lb-text-muted);
+  --color-text-subtle: var(--lb-text-subtle);
+  --color-text-disabled: var(--lb-text-disabled);
+
+  --color-accent: var(--lb-accent);
+  --color-accent-hover: var(--lb-accent-hover);
+  --color-accent-pressed: var(--lb-accent-pressed);
+  --color-accent-fg: var(--lb-accent-fg);
+  --color-accent-text: var(--lb-accent-text);
+  --color-accent-subtle: var(--lb-accent-subtle);
+  --color-accent-subtle-text: var(--lb-accent-subtle-text);
+  --color-accent-subtle-hover: var(--lb-accent-subtle-hover);
+
+  --color-focus: var(--lb-focus);
+
+  --color-success: var(--lb-success);
+  --color-success-subtle: var(--lb-success-subtle);
+  --color-warning: var(--lb-warning);
+  --color-warning-subtle: var(--lb-warning-subtle);
+  --color-danger: var(--lb-danger);
+  --color-danger-fill: var(--lb-danger-fill);
+  --color-danger-fg: var(--lb-danger-fg);
+  --color-danger-subtle: var(--lb-danger-subtle);
+
+  --color-selection: var(--lb-selection);
+  --color-selection-halo: var(--lb-selection-halo);
+  --color-guide: var(--lb-guide);
+  --color-group-outline: var(--lb-group-outline);
+  --color-marquee: var(--lb-marquee);
+  --color-marquee-fill: var(--lb-marquee-fill);
+  --color-handle-fill: var(--lb-handle-fill);
+  --color-hud-bg: var(--lb-hud-bg);
+  --color-hud-text: var(--lb-hud-text);
+
+  --shadow-float: var(--lb-shadow-float);
+  --shadow-dialog: var(--lb-shadow-dialog);
+}
+
+@theme {
+  /* type */
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --text-2xs: 0.6875rem;  --text-2xs--line-height: 1rem;      /* 11/16 canvas chrome labels only */
+  --text-xs: 0.75rem;     --text-xs--line-height: 1rem;       /* 12/16 captions, shortcuts */
+  --text-sm: 0.8125rem;   --text-sm--line-height: 1.25rem;    /* 13/20 default UI text */
+  --text-base: 0.875rem;  --text-base--line-height: 1.375rem; /* 14/22 inputs, login body */
+  --text-doc: 1rem;       --text-doc--line-height: 1.625rem;  /* 16/26 editor body */
+  --text-lg: 1.25rem;     --text-lg--line-height: 1.75rem;    /* 20/28 editor h3, dialog title */
+  --text-xl: 1.5rem;      --text-xl--line-height: 2rem;       /* 24/32 editor h2, login title */
+  --text-2xl: 1.875rem;   --text-2xl--line-height: 2.375rem;  /* 30/38 editor h1 */
+  --text-display: 3rem;   --text-display--line-height: 1;     /* 48/48 login headline (>=1024px) */
+
+  /* radius */
+  --radius-xs: 2px;    /* resize handles */
+  --radius-sm: 4px;    /* pills, kbd, badges, Google button (rectangular) */
+  --radius-md: 6px;    /* buttons, inputs, select, tabs, list rows */
+  --radius-lg: 8px;    /* menus, popovers, panels, toasts */
+  --radius-xl: 12px;   /* login card, dialogs */
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-press: 80ms;
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --duration-moment: 400ms;
+}
+
+/* ── Base layer: focus, cursor, selection, reduced motion ── */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--lb-bg);
+    color: var(--lb-text);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--lb-focus);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"],
+  select:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background: var(--lb-accent-subtle);
+    color: var(--lb-text);
+  }
+
+  .tiptap {
+    caret-color: var(--lb-accent-text);
+  }
+  /* static placeholder: the old endless "breathe" loop is removed */
+  .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--lb-text-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

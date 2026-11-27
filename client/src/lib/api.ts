@@ -21,7 +21,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+// binary GET (export zip). errors still come back as the server's JSON {error}
+async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`/api${path}`, { credentials: 'include' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.error ?? res.statusText);
+  }
+  const match = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '');
+  return { blob: await res.blob(), filename: match?.[1] ?? 'export.zip' };
+}
+
 export const api = {
+  download,
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
@@ -30,7 +42,8 @@ export const api = {
 
 // ── Types (mirror server responses) ───────
 
-export type User = { id: string; email: string; name: string | null };
+export type User = { id: string; email: string; name: string | null; avatarUrl: string | null };
+export type Providers = { google: boolean; github: boolean };
 export type Role = 'owner' | 'editor' | 'viewer';
 
 export type WorkspaceSummary = {
